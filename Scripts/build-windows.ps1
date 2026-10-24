@@ -22,7 +22,11 @@ $env:PYTHONPATH = Join-Path $ProjectRoot "Windows"
 $env:QT_QPA_PLATFORM = "offscreen"
 Run-Checked $PythonExe @("-m", "unittest", "discover", "-s", "Windows/tests", "-v")
 Run-Checked $PythonExe @("Windows/package_assets.py")
-Run-Checked $PythonExe @("Windows/app.py", "--self-test", ".build/windows-source-smoke.json")
+& $PythonExe -X faulthandler Windows/app.py --self-test .build/windows-source-smoke.json
+$SourceExit = $LASTEXITCODE
+if (Test-Path .build/windows-source-smoke.json) { Get-Content .build/windows-source-smoke.json -Raw | Write-Host }
+if (Test-Path .build/windows-source-smoke.fault.log) { Get-Content .build/windows-source-smoke.fault.log -Raw | Write-Host }
+if ($SourceExit -ne 0) { throw "Source Qt smoke test failed ($SourceExit)." }
 $IconPng = Join-Path $ProjectRoot "Assets/AppIcon.png"
 $IconIco = Join-Path $ProjectRoot ".build/windows-assets/AppIcon.ico"
 $LicenseDir = Join-Path $ProjectRoot ".build/windows-assets/Licenses"
@@ -40,6 +44,8 @@ $Report = Join-Path $ProjectRoot ".build/windows-packaged-smoke.json"
 $AppExe = Join-Path $ProjectRoot "dist/windows/HlgBridge/HlgBridge.exe"
 $Process = Start-Process -FilePath $AppExe -ArgumentList @("--self-test", ('"' + $Report + '"')) -Wait -PassThru
 if (Test-Path $Report) { Get-Content $Report -Raw | Write-Host }
+$FaultReport = [System.IO.Path]::ChangeExtension($Report, ".fault.log")
+if (Test-Path $FaultReport) { Get-Content $FaultReport -Raw | Write-Host }
 if ($Process.ExitCode -ne 0 -or -not (Test-Path $Report)) { throw "Packaged app self-test failed." }
 $Smoke = Get-Content $Report -Raw | ConvertFrom-Json
 if (-not $Smoke.success) { throw "Packaged app self-test failed: $($Smoke.error)" }
