@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import traceback
+import time
 import numpy as np
 from PIL import Image
 import pillow_heif
@@ -30,10 +31,19 @@ def run(report_path):
                 assert opened.size == (48, 32)
             window.add_paths([source])
             assert window.tree.topLevelItemCount() == 1
-            app.processEvents()
+            window.output = root
+            window.refresh_controls()
+            window.run_batch()
+            deadline = time.monotonic() + 20
+            while window.running and time.monotonic() < deadline:
+                app.processEvents()
+                time.sleep(0.01)
+            assert not window.running, "Qt batch thread did not finish"
+            assert "已导出 2" in window.tree.topLevelItem(0).text(2)
+            assert (root / "test_HDR_1.jpg").is_file()
             window.close()
             app.processEvents()
-        result.update(success=True, qt=True, hevc_10_bit=True, ultra_hdr=True)
+        result.update(success=True, qt=True, hevc_10_bit=True, ultra_hdr=True, qt_batch_thread=True)
     except Exception:
         result["error"] = traceback.format_exc()
     Path(report_path).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

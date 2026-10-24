@@ -23,17 +23,23 @@ $env:QT_QPA_PLATFORM = "offscreen"
 Run-Checked $PythonExe @("-m", "unittest", "discover", "-s", "Windows/tests", "-v")
 Run-Checked $PythonExe @("Windows/package_assets.py")
 Run-Checked $PythonExe @("Windows/app.py", "--self-test", ".build/windows-source-smoke.json")
+$IconPng = Join-Path $ProjectRoot "Assets/AppIcon.png"
+$IconIco = Join-Path $ProjectRoot ".build/windows-assets/AppIcon.ico"
+$LicenseDir = Join-Path $ProjectRoot ".build/windows-assets/Licenses"
+$HooksDir = Join-Path $ProjectRoot "Windows/hooks"
+$AppScript = Join-Path $ProjectRoot "Windows/app.py"
 Run-Checked $PythonExe @("-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--onedir",
     "--name", "HlgBridge", "--distpath", "dist/windows", "--workpath", ".build/windows-pyinstaller",
-    "--specpath", ".build/windows-spec", "--icon", ".build/windows-assets/AppIcon.ico",
-    "--additional-hooks-dir", "Windows/hooks", "--add-binary", "$CodecPath;native",
-    "--add-data", "Assets/AppIcon.png;Assets", "--add-data", ".build/windows-assets/AppIcon.ico;Assets",
-    "--add-data", ".build/windows-assets/Licenses;Licenses", "Windows/app.py")
+    "--specpath", ".build/windows-spec", "--icon", $IconIco,
+    "--additional-hooks-dir", $HooksDir, "--add-binary", "$CodecPath;native",
+    "--add-data", "$IconPng;Assets", "--add-data", "$IconIco;Assets",
+    "--add-data", "$LicenseDir;Licenses", $AppScript)
 # The packaged self-test must load the bundled DLL, not the source build override.
 Remove-Item Env:HLGBRIDGE_CODEC
 $Report = Join-Path $ProjectRoot ".build/windows-packaged-smoke.json"
 $AppExe = Join-Path $ProjectRoot "dist/windows/HlgBridge/HlgBridge.exe"
 $Process = Start-Process -FilePath $AppExe -ArgumentList @("--self-test", ('"' + $Report + '"')) -Wait -PassThru
+if (Test-Path $Report) { Get-Content $Report -Raw | Write-Host }
 if ($Process.ExitCode -ne 0 -or -not (Test-Path $Report)) { throw "Packaged app self-test failed." }
 $Smoke = Get-Content $Report -Raw | ConvertFrom-Json
 if (-not $Smoke.success) { throw "Packaged app self-test failed: $($Smoke.error)" }
