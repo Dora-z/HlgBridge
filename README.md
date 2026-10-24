@@ -113,3 +113,7 @@ swift Scripts/compare-reference.swift /path/to/camera.jpg /path/to/export_SDR.jp
 ```
 
 原生界面交互检查尚未完成（当前电脑控制权限未授予），小米相册 HDR 显示仍待实机验收。
+
+## 应用图标
+
+图标使用暖色光弧连接灰暗与明亮的照片卡片。源文件为 `Assets/AppIcon.png`，由内置 image_gen 生成，设计提示词保存在 `Assets/AppIcon.prompt.txt`。`Scripts/build-icon.sh` 生成 16–1024 像素的标准 macOS 图标尺寸和 `.icns`；应用构建时自动打包并写入 `CFBundleIconFile`。图标更新包含在 1.1.1 版中。

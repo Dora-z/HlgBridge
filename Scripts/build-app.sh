@@ -3,9 +3,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 if [ ! -f .build/native/lib/libuhdr.a ]; then Scripts/bootstrap.sh; fi
 swift build -c release
+Scripts/build-icon.sh
 APP="$PWD/dist/HlgBridge.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Licenses"
 cp .build/release/HlgBridge "$APP/Contents/MacOS/"
+cp .build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp .build/release/hlgbridge-cli dist/
 cp .build/native/licenses/* "$APP/Contents/Resources/Licenses/"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -16,9 +18,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDisplayName</key><string>HlgBridge</string>
 <key>CFBundleIdentifier</key><string>io.github.dora-z.hlgbridge</string>
 <key>CFBundleExecutable</key><string>HlgBridge</string>
+<key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.1.0</string>
-<key>CFBundleVersion</key><string>2</string>
+<key>CFBundleShortVersionString</key><string>1.1.1</string>
+<key>CFBundleVersion</key><string>3</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
