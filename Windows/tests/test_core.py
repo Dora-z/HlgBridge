@@ -132,13 +132,24 @@ class CoreTests(unittest.TestCase):
         linear = core.hlg_to_linear(encoded)
         self.assertTrue(np.isfinite(linear).all())
         np.testing.assert_allclose(linear[0, -1], 1000 / 203, rtol=1e-6)
-        for tone in ["camera", "subject", "highlight"]:
+        for tone in ["natural", "camera", "subject", "highlight"]:
             result = core.map_sdr(linear, core.Options(tone=tone))
             self.assertTrue(np.isfinite(result).all())
             self.assertGreaterEqual(float(np.min(np.diff(result[0, :, 0]))), -1e-6)
             self.assertTrue(np.all((result >= 0) & (result <= 1)))
             np.testing.assert_allclose(result[..., 0], result[..., 1], atol=1e-5)
             np.testing.assert_allclose(result[..., 1], result[..., 2], atol=1e-5)
+
+    def test_natural_retains_bright_detail_and_exposure_control(self):
+        levels = np.array([0.5, 1.0, 2.0, 4.926], np.float32)
+        image = np.repeat(levels[:, None], 3, axis=1)[None]
+        normal = core.map_sdr(image, core.Options())
+        darker = core.map_sdr(image, core.Options(exposure=-1))
+        self.assertTrue(np.all(np.diff(normal[0, :, 0]) > 0.001))
+        self.assertTrue(np.all(normal < 0.99))
+        self.assertTrue(np.all(darker < normal))
+        with self.assertRaises(ValueError):
+            core.Options(exposure=float("nan")).validate()
 
 
 if __name__ == "__main__":

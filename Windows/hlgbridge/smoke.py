@@ -30,7 +30,7 @@ def run(report_path):
         window.show()
         app.processEvents()
         checkpoint("window ready")
-        assert window.tone.currentData() == "camera"
+        assert window.tone.currentData() == "natural"
         with tempfile.TemporaryDirectory(prefix="HlgBridge-检查-") as directory:
             root = Path(directory)
             pixels = np.full((32, 48, 3), 35000, dtype=np.uint16)

@@ -134,7 +134,7 @@ class Window(QMainWindow):
         self.assume = QCheckBox("按松下 HLG 处理所选照片（确认来源后启用）")
         right_layout.addWidget(self.assume)
         self.tone = QComboBox()
-        for label, value in [("机内转换近似（默认）", "camera"), ("主体明亮", "subject"), ("保留高光", "highlight")]:
+        for label, value in [("自然 · 保留高光（默认）", "natural"), ("机内转换近似（偏亮）", "camera"), ("主体明亮", "subject"), ("保留高光", "highlight")]:
             self.tone.addItem(label, value)
         right_layout.addWidget(QLabel("SDR 观感"))
         right_layout.addWidget(self.tone)
@@ -147,7 +147,16 @@ class Window(QMainWindow):
         strength_row.addWidget(self.strength)
         right_layout.addLayout(strength_row)
         self.strength.setEnabled(False)
-        description = QLabel("机内近似基于一组 L10 照片校准，其他场景仍需验证。Windows 的“保留高光”采用独立曲线。")
+        exposure_row = QHBoxLayout()
+        self.exposure_label = QLabel("SDR 曝光 +0.0 EV")
+        self.exposure = QSlider(Qt.Orientation.Horizontal)
+        self.exposure.setRange(-30, 30)
+        self.exposure_reset = QPushButton("重置")
+        exposure_row.addWidget(self.exposure_label)
+        exposure_row.addWidget(self.exposure)
+        exposure_row.addWidget(self.exposure_reset)
+        right_layout.addLayout(exposure_row)
+        description = QLabel("自然模式柔和压缩亮部；机内近似基于单张室外照片，室内可能偏亮。")
         description.setWordWrap(True)
         description.setStyleSheet("color: #737373; font-size: 12px;")
         right_layout.addWidget(description)
@@ -191,13 +200,20 @@ class Window(QMainWindow):
         self.tone.currentIndexChanged.connect(self.tone_changed)
         self.strength.valueChanged.connect(lambda value: self.strength_label.setText(f"主体提亮 {value}%"))
         self.strength.sliderReleased.connect(self.update_preview)
+        self.exposure.valueChanged.connect(lambda value: self.exposure_label.setText(f"SDR 曝光 {value / 10:+.1f} EV"))
+        self.exposure.sliderReleased.connect(self.update_preview)
+        self.exposure_reset.clicked.connect(self.reset_exposure)
         self.assume.toggled.connect(self.assume_changed)
         self.start_button.clicked.connect(self.run_batch)
         self.cancel_button.clicked.connect(self.cancel)
 
     def options(self):
         return Options(mode=self.mode.currentData(), tone=self.tone.currentData(),
-                       strength=self.strength.value() / 100, keep_gps=self.gps.isChecked())
+                       strength=self.strength.value() / 100, exposure=self.exposure.value() / 10, keep_gps=self.gps.isChecked())
+
+    def reset_exposure(self):
+        self.exposure.setValue(0)
+        self.update_preview()
 
     def choose_files(self):
         paths, _ = QFileDialog.getOpenFileNames(self, "选择照片", "", "HEIF 照片 (*.hif *.heif *.heic *.HIF *.HEIF *.HEIC)")
@@ -310,7 +326,7 @@ class Window(QMainWindow):
 
     def refresh_controls(self):
         for control in [self.add_button, self.folder_button, self.clear_button, self.tone, self.mode,
-                        self.output_button, self.gps, self.assume]:
+                        self.output_button, self.gps, self.assume, self.exposure, self.exposure_reset]:
             control.setEnabled(not self.running)
         self.strength.setEnabled(not self.running and self.tone.currentData() == "subject")
         self.start_button.setEnabled(not self.running and bool(self.paths) and self.output is not None)

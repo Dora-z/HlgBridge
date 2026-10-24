@@ -41,14 +41,17 @@ class Cancellation:
 @dataclass(frozen=True)
 class Options:
     mode: str = "both"
-    tone: str = "camera"
+    tone: str = "natural"
     strength: float = 0.65
+    exposure: float = 0.0
     keep_gps: bool = False
     assume_hlg: bool = False
 
     def validate(self):
-        if self.mode not in {"sdr", "hdr", "both"} or self.tone not in {"camera", "subject", "highlight"}:
+        if self.mode not in {"sdr", "hdr", "both"} or self.tone not in {"natural", "camera", "subject", "highlight"}:
             raise ValueError("输出模式无效。")
+        if not np.isfinite(self.exposure) or not -3 <= self.exposure <= 3:
+            raise ValueError("曝光补偿应在 -3 到 +3 EV 之间。")
         if not np.isfinite(self.strength) or not 0 <= self.strength <= 1:
             raise ValueError("提亮强度应在 0–100% 之间。")
 
@@ -138,6 +141,17 @@ def hlg_to_linear(encoded: np.ndarray) -> np.ndarray:
 
 
 def map_sdr(linear: np.ndarray, options: Options) -> np.ndarray:
+    linear = linear * np.float32(2 ** options.exposure)
+    if options.tone == "natural":
+        rgb = np.maximum(linear @ BT2020_TO_709.T, 0)
+        y = rgb @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+        target = 2 * y / (1 + 2 * y)
+        gain = np.divide(target, y, out=np.full_like(y, 2.0), where=y > 1e-8)
+        rgb *= gain[..., None]
+        peak = np.max(rgb, axis=-1)
+        chroma = np.minimum(1, np.divide(1 - target, np.maximum(peak - target, 1e-8)))
+        rgb = target[..., None] + chroma[..., None] * (rgb - target[..., None])
+        return srgb_encode(rgb)
     y = np.maximum(linear @ WEIGHTS, 0)
     if options.tone == "camera":
         target = np.minimum(3.30 * y / (1 + 2.10 * y), 1)
@@ -225,7 +239,9 @@ def _decode(path: Path, options: Options, max_side: int | None = None):
 def preview(path: Path, options: Options) -> Image.Image:
     options.validate()
     pixels, _, _ = _decode(path, options, max_side=1200)
-    return Image.fromarray(pixels)
+    image = Image.fromarray(pixels)
+    image.info["icc_profile"] = SRGB_ICC
+    return image
 
 
 def _publish(items: list[tuple[str, bytes]], stem: str, directory: Path, cancellation: Cancellation) -> list[Path]:
