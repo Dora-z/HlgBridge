@@ -7,16 +7,16 @@ do {
         print(try Converter.verifyHDR(URL(fileURLWithPath: args[1])))
     } else {
         guard args.count >= 2 else {
-            throw BridgeError("用法：hlgbridge-cli 输入文件或目录 输出目录 [--sdr|--hdr] [--keep-gps] [--assume-hlg] [--standard]\n      hlgbridge-cli --verify HDR.jpg")
+            throw BridgeError("用法：hlgbridge-cli 输入文件或目录 输出目录 [--sdr|--hdr] [--keep-gps] [--assume-hlg] [--standard|--subject]\n      hlgbridge-cli --verify HDR.jpg")
         }
-        let allowed = Set(["--sdr", "--hdr", "--keep-gps", "--assume-hlg", "--standard"])
-        guard args.dropFirst(2).allSatisfy({ allowed.contains($0) }), !(args.contains("--sdr") && args.contains("--hdr")) else { throw BridgeError("命令行选项无效。") }
+        let allowed = Set(["--sdr", "--hdr", "--keep-gps", "--assume-hlg", "--standard", "--subject"])
+        guard args.dropFirst(2).allSatisfy({ allowed.contains($0) }), !(args.contains("--sdr") && args.contains("--hdr")), !(args.contains("--standard") && args.contains("--subject")) else { throw BridgeError("命令行选项无效。") }
         let source = URL(fileURLWithPath: args[0]), output = URL(fileURLWithPath: args[1], isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let files = PhotoScanner.collect([source])
         guard !files.isEmpty else { throw BridgeError("未找到 HEIF 照片。") }
         let options = ConversionOptions(mode: args.contains("--sdr") ? .sdr : args.contains("--hdr") ? .hdr : .both,
-                                        keepGPS: args.contains("--keep-gps"), assumeHLG: args.contains("--assume-hlg"), toneStyle: args.contains("--standard") ? .standard : .subject)
+                                        keepGPS: args.contains("--keep-gps"), assumeHLG: args.contains("--assume-hlg"), toneStyle: args.contains("--standard") ? .standard : args.contains("--subject") ? .subject : .camera)
         var failed = false
         for file in files {
             do {

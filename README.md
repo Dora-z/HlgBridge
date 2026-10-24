@@ -6,7 +6,7 @@
 
 1. 打开 `HlgBridge.app`，拖入 `.HIF`、`.HEIF`、`.HEIC` 照片或文件夹。
 2. 选择普通 JPEG、HDR JPEG 或同时导出（默认）。
-3. 选择 SDR 观感：默认「主体明亮」，提亮强度 65%；也可选择原来的「系统映射」。
+3. 选择 SDR 观感：默认「机内转换近似」；也可选择可调的「主体明亮」（强度默认 65%）或「系统映射」。
 4. 选择输出目录，点击「开始转换」。
 
 普通 JPEG 适合相册、分享和打印。HDR JPEG 含普通 SDR 底图与增益图，兼容的查看器可恢复高光；不支持 HDR 的查看器显示 SDR 底图。HDR 屏幕本身不代表相册一定兼容 Ultra HDR。
@@ -41,6 +41,7 @@ open dist/HlgBridge.app
 ```sh
 dist/hlgbridge-cli /path/to/photos /path/to/output
 dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --sdr --standard
+dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --sdr --subject
 dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --hdr --keep-gps
 dist/hlgbridge-cli --verify /path/to/photo_HDR.jpg
 ```
@@ -51,7 +52,13 @@ dist/hlgbridge-cli --verify /path/to/photo_HDR.jpg
 
 ImageIO 读取色彩配置和拍摄信息，Core Image 以扩展线性 BT.2020、半精度浮点处理，不提前截断为 8 位。
 
-HLG 输入通过 macOS 15 的 `CIToneMapHeadroom` 映射至 SDR，再转换为带 ICC 配置的 sRGB JPEG。「主体明亮」在系统映射后，用线性 BT.2020 亮度曲线抬升暗部及中间调，保持黑白端点和中性色；高亮超出色域时压缩饱和度。它不加入拍屏参考里的偏粉色，也不声称复刻松下 MODE2。该控制仅作用于 HLG 的 SDR 输出与 HDR 文件的 SDR 底图，不改变原始 HDR 目标像素。
+HLG 的 SDR 输出提供三种观感：
+
+- **机内转换近似（默认）**：依据一组 DC-L10 HLG 与机内 JPEG 的对应像素得到经验曲线。在线性 BT.2020 中，亮度 `Y = 0.2627R + 0.6780G + 0.0593B`，目标亮度 `min(3.30Y / (1 + 2.10Y), 1)`，再以亮度比缩放 RGB。两个全局系数用于提亮主体并压缩高光，没有从单张照片拟合白平衡或颜色矩阵。仅在这一组样本上校准，其他场景、照片风格和固件仍需验证，不能视为松下算法的精确复刻。
+- **系统映射**：macOS 15 的 `CIToneMapHeadroom`，目标 headroom 为 1。
+- **主体明亮**：系统映射后额外抬升暗部及中间调，强度可调，保持黑白端点和中性色，高亮超出色域时压缩饱和度。
+
+三种结果都先生成线性半精度 SDR 中间图像，明确标记 headroom 为 1，再转成带 ICC 配置的 8 位 sRGB JPEG，避免从 HDR 滤镜图直接导出到 sRGB 时再次改变亮度。预览使用相同路径。所有观感只影响 HLG 的 SDR 输出与 HDR 文件的 SDR 底图，不改变原始 HDR 目标像素；SDR 原片直接走正常色彩转换。
 
 HDR 路径将原始线性 HDR 像素和**已经编码的同一张 SDR JPEG**传给 libultrahdr，生成多通道增益图（1/2 分辨率，质量 95）。启用 XMP 与 ISO 21496-1 两种增益图元数据。不会将 HDR 成品再交给普通 JPEG 编码器，以免丢失增益图。
 
@@ -61,7 +68,7 @@ HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用
 
 ## 验证和兼容性
 
-测试通过独立 Swift 可执行检查器运行，不依赖仅完整 Xcode 提供的 XCTest。自动测试使用运行时生成的合成 HEIF，不包含个人照片。检查双输出、增益图解码、SDR 底图一致性、方向、Exif、GPS、未知配置、损坏文件、重名、取消和无写入权限。
+测试通过独立 Swift 可执行检查器运行，不依赖仅完整 Xcode 提供的 XCTest。自动测试使用运行时生成的合成 HEIF，不包含个人照片。目前 10 组检查覆盖双输出、增益图解码、SDR 底图一致性、方向、Exif、GPS、未知配置、损坏文件、重名、取消、无写入权限、灰阶单调、中性色及最终 JPEG/预览不会再次压暗。
 
 | 环境 | 状态 |
 |---|---|
@@ -85,6 +92,24 @@ HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用
 
 相机屏幕上的 `MON MODE2` 表示启用了 HLG 显示辅助。松下说明 MODE2 优先主体亮度，MODE1 优先天空等高亮区域。系统默认色调映射并不等于这两种厂商显示转换。[官方说明](https://eww.pavc.panasonic.co.jp/dscoi/DC-L10/html/DC-L10_DVQP3497_eng/0100.html)
 
-默认「主体明亮」是可调的近似观感，不是经过校准的相机匹配。拍屏照片受相机屏幕亮度、拍摄手机曝光和白平衡影响，不能当作绝对色彩基准。精确对照应使用同一张 HEIF 在相机内通过「回放 → 处理图像 → HEIF 转 JPEG」生成的文件。[相机转换说明](https://eww.pavc.panasonic.co.jp/dscoi/DC-L10/html/DC-L10_DVQP3497_eng/0110.html)
+拍屏照片受相机屏幕亮度、拍摄手机曝光和白平衡影响，不能当作绝对色彩基准。这里使用同一张 HEIF 在相机内通过「回放 → 处理图像 → HEIF 转 JPEG」生成的文件进行校准。[相机转换说明](https://eww.pavc.panasonic.co.jp/dscoi/DC-L10/html/DC-L10_DVQP3497_eng/0110.html)
 
-本机原片验证：5408 × 3608；HDR 可完整解码，包含 XMP/ISO 两种增益图标记。系统映射下两份 JPEG 的压缩像素数据相同；ColorSync 解码差异最大为 1/255，因此不宣称所有解码器逐像素相同。原生界面交互检查尚未完成（当前电脑控制权限未授予）。
+### 1.1 版的机内 JPEG 对照
+
+在同一对 5408 × 3608 的原片和机内 JPEG 上，以 1200 × 801、sRGB 8 位比较完整画面的对应像素（RGB 通道平均绝对误差，范围 0–255）：
+
+| 版本 / 模式 | 平均差值 | 95% 的通道误差不超过 |
+|---|---:|---:|
+| 旧版系统映射 | 68.780 | 101 |
+| 旧版主体明亮 | 27.665 | 56 |
+| 1.1 版机内转换近似 | 3.639 | 12 |
+
+这是同一组校准样本的对照，不能代表其他照片的独立准确率。JPEG 量化、色度抽样、厂商处理和高光裁剪也会导致差异。两种输出均保持全分辨率，HDR 文件可完整解码，含 XMP/ISO 两种增益图标记。个人参考原片与成品不进入仓库。
+
+可在本机对自己的图片复现比较：
+
+```sh
+swift Scripts/compare-reference.swift /path/to/camera.jpg /path/to/export_SDR.jpg
+```
+
+原生界面交互检查尚未完成（当前电脑控制权限未授予），小米相册 HDR 显示仍待实机验收。

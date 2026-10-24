@@ -90,6 +90,10 @@ struct ContentView: View {
                         Picker("SDR 观感", selection: $model.toneStyle) {
                             ForEach(ToneStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                         }.onChange(of: model.toneStyle) { _, _ in model.updatePreview() }
+                        if model.toneStyle == .camera {
+                            Text("依据 L10 机内 JPEG 对照，优先匹配主体亮度与高光；其他场景仍需验证。")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         if model.toneStyle == .subject {
                             HStack {
                                 Text("主体提亮").font(.caption)

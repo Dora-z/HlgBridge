@@ -137,4 +137,58 @@ final class ConverterTests {
         XCTAssertEqual(try Data(contentsOf: standard.files[0]), try Data(contentsOf: subject.files[0]))
     }
 
+    func testCameraToneMonotonicNeutralAndSDRBypass() throws {
+        let space = CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!
+        let context = CIContext(options: [.workingColorSpace: space, .workingFormat: CIFormat.RGBAf])
+        var previous: Float = -1
+        for value in [Float(0), 0.0001, 0.005, 0.02, 0.1, 0.18, 0.5, 1, 2, 4.926] {
+            let input = CIImage(color: CIColor(red: CGFloat(value), green: CGFloat(value), blue: CGFloat(value), colorSpace: space)!).cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
+            let output = try CameraTone.apply(input)
+            var p = [Float](repeating: 0, count: 4)
+            context.render(output, toBitmap: &p, rowBytes: 16, bounds: input.extent, format: .RGBAf, colorSpace: space)
+            XCTAssertTrue(p.allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 1.001 })
+            XCTAssertTrue(abs(p[0] - p[1]) < 0.001 && abs(p[1] - p[2]) < 0.001)
+            XCTAssertTrue(p[0] >= previous)
+            if value == 0 { XCTAssertTrue(p[0] < 0.0001) }
+            if value > 0 && value <= 0.5 { XCTAssertTrue(p[0] > value) }
+            if value >= 1 { XCTAssertTrue(abs(p[0] - 1) < 0.001) }
+            previous = p[0]
+        }
+        let sdr = try fixture(hdr: false)
+        let standard = try Converter().convert(sdr, to: directory, options: .init(mode: .sdr, toneStyle: .standard))
+        let camera = try Converter().convert(sdr, to: directory, options: .init(mode: .sdr))
+        XCTAssertEqual(try Data(contentsOf: standard.files[0]), try Data(contentsOf: camera.files[0]))
+        XCTAssertEqual(ConversionOptions().toneStyle, .camera)
+    }
+
+    func testExportedSDRDoesNotRemapHDRTwice() throws {
+        let source = try fixture()
+        let linear = CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!
+        let context = CIContext(options: [.workingColorSpace: linear, .workingFormat: CIFormat.RGBAf])
+        let input = try XCTUnwrap(CIImage(contentsOf: source))
+        let patch = CGRect(x: 48, y: 24, width: 1, height: 1)
+        var raw = [Float](repeating: 0, count: 4)
+        context.render(input, toBitmap: &raw, rowBytes: 16, bounds: patch, format: .RGBAf, colorSpace: linear)
+        let y = raw[0] * 0.2627 + raw[1] * 0.6780 + raw[2] * 0.0593
+        let target = min(3.30 * y / (1 + 2.10 * y), 1)
+        let rgb = SIMD3<Float>(raw[0], raw[1], raw[2]) * (target / y)
+        // Linear BT.2020 -> linear BT.709, followed by the sRGB transfer curve.
+        let r = rgb.x * 1.660491 - rgb.y * 0.587641 - rgb.z * 0.072850
+        let g = -rgb.x * 0.124551 + rgb.y * 1.132900 - rgb.z * 0.008349
+        let b = -rgb.x * 0.018151 - rgb.y * 0.100579 + rgb.z * 1.118730
+        let expected = [r, g, b].map { value -> Float in
+            let c = min(1, max(0, value))
+            return 255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * pow(c, 1 / 2.4) - 0.055)
+        }
+        let converter = Converter()
+        let result = try converter.convert(source, to: directory, options: .init(mode: .sdr))
+        let output = try XCTUnwrap(CIImage(contentsOf: result.files[0]))
+        let preview = CIImage(cgImage: try converter.preview(source))
+        for image in [output, preview] {
+            var actual = [UInt8](repeating: 0, count: 4)
+            context.render(image, toBitmap: &actual, rowBytes: 4, bounds: patch, format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+            for channel in 0..<3 { XCTAssertTrue(abs(Float(actual[channel]) - expected[channel]) <= 3) }
+        }
+    }
+
 }

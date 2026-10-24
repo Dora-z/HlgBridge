@@ -17,7 +17,7 @@ struct PhotoRow: Identifiable {
     @Published var rows: [PhotoRow] = []
     @Published var selection: UUID?
     @Published var mode: OutputMode = .both
-    @Published var toneStyle: ToneStyle = .subject
+    @Published var toneStyle: ToneStyle = .camera
     @Published var subjectLift: Double = 0.65
     @Published var keepGPS = false
     @Published var outputDirectory: URL?

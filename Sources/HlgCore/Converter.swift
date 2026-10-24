@@ -52,6 +52,7 @@ public final class Converter {
     }
     private func sdrImage(_ image: CIImage, hdr: Bool, toneStyle: ToneStyle, subjectLift: Double) throws -> CIImage {
         guard hdr else { return image }
+        if toneStyle == .camera { return try CameraTone.apply(image) }
         let filter = CIFilter.toneMapHeadroom()
         filter.inputImage = image
         filter.sourceHeadroom = image.contentHeadroom > 1 ? image.contentHeadroom : 1000 / 203
@@ -59,22 +60,34 @@ public final class Converter {
         let mapped = filter.outputImage ?? image
         return toneStyle == .subject ? try SubjectTone.apply(mapped, strength: subjectLift) : mapped
     }
-    public func preview(_ url: URL, assumeHLG: Bool = false, toneStyle: ToneStyle = .subject, subjectLift: Double = 0.65) throws -> CGImage {
+    public func preview(_ url: URL, assumeHLG: Bool = false, toneStyle: ToneStyle = .camera, subjectLift: Double = 0.65) throws -> CGImage {
         let (input, info, _) = try load(url, assumeHLG: assumeHLG)
         let scale = min(1, 1400 / max(input.extent.width, input.extent.height))
-        let image = try sdrImage(input, hdr: info.kind == .hlg || (info.kind == .unknown && assumeHLG), toneStyle: toneStyle, subjectLift: subjectLift)
+        let isHDR = info.kind == .hlg || (info.kind == .unknown && assumeHLG)
+        let image = try sdrImage(input, hdr: isHDR, toneStyle: toneStyle, subjectLift: subjectLift)
             .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        guard let output = context.createCGImage(image, from: image.extent.integral, format: .RGBA8,
-                                                 colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!) else {
-            throw BridgeError("无法生成预览。")
-        }
-        return output
+        return try renderSDR(image, materialize: isHDR)
     }
-    private func jpeg(_ image: CIImage, properties: [String: Any], keepGPS: Bool) throws -> Data {
-        guard let cg = context.createCGImage(image, from: image.extent, format: .RGBA8,
-                                             colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!) else {
-            throw BridgeError("无法生成 SDR 像素。")
+    private func renderSDR(_ image: CIImage, materialize: Bool) throws -> CGImage {
+        var sdr = image
+        if materialize {
+            // Freeze the custom/system SDR result in a linear half-float image before
+            // changing color spaces. Direct HDR graph -> sRGB rendering can apply a
+            // second destination-dependent brightness conversion on macOS 15.
+            guard let linear = context.createCGImage(image, from: image.extent, format: .RGBAh,
+                colorSpace: CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!, deferred: false) else {
+                throw BridgeError("无法生成线性 SDR 中间图像。")
+            }
+            sdr = CIImage(cgImage: linear, options: [.contentHeadroom: 1.0, .toneMapHDRtoSDR: false])
         }
+        guard let result = context.createCGImage(sdr, from: sdr.extent, format: .RGBA8,
+                                                colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!) else {
+            throw BridgeError("无法生成 sRGB 像素。")
+        }
+        return result
+    }
+    private func jpeg(_ image: CIImage, properties: [String: Any], keepGPS: Bool, renderedHDR: Bool) throws -> Data {
+        let cg = try renderSDR(image, materialize: renderedHDR)
         let data = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else {
             throw BridgeError("无法创建 JPEG 编码器。")
@@ -90,7 +103,7 @@ public final class Converter {
         }
         if let tiff = properties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
             var clean = tiff.filter { ["Make", "Model", "DateTime", "Artist", "Copyright"].contains($0.key) }
-            clean["Orientation"] = 1; clean["Software"] = "HlgBridge 1.0"
+            clean["Orientation"] = 1; clean["Software"] = "HlgBridge 1.1"
             output[kCGImagePropertyTIFFDictionary as String] = clean
         }
         if keepGPS { output[kCGImagePropertyGPSDictionary as String] = properties[kCGImagePropertyGPSDictionary as String] }
@@ -126,7 +139,7 @@ public final class Converter {
         let (input, info, props) = try load(source, assumeHLG: options.assumeHLG)
         let isHDR = info.kind == .hlg || (info.kind == .unknown && options.assumeHLG)
         if !isHDR && options.mode == .hdr { throw BridgeError("这是 SDR 照片，不能生成真实 HDR；请选择普通 JPEG 或同时导出。") }
-        let sdr = try jpeg(sdrImage(input, hdr: isHDR, toneStyle: options.toneStyle, subjectLift: options.subjectLift), properties: props, keepGPS: options.keepGPS)
+        let sdr = try jpeg(sdrImage(input, hdr: isHDR, toneStyle: options.toneStyle, subjectLift: options.subjectLift), properties: props, keepGPS: options.keepGPS, renderedHDR: isHDR)
         try cancellation.check()
         var pending: [(String, Data)] = []
         if options.mode != .hdr { pending.append(("SDR", sdr)) }
