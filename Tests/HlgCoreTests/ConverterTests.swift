@@ -158,7 +158,7 @@ final class ConverterTests {
         let standard = try Converter().convert(sdr, to: directory, options: .init(mode: .sdr, toneStyle: .standard))
         let camera = try Converter().convert(sdr, to: directory, options: .init(mode: .sdr))
         XCTAssertEqual(try Data(contentsOf: standard.files[0]), try Data(contentsOf: camera.files[0]))
-        XCTAssertEqual(ConversionOptions().toneStyle, .camera)
+        XCTAssertEqual(ConversionOptions().toneStyle, .natural)
     }
 
     func testExportedSDRDoesNotRemapHDRTwice() throws {
@@ -181,14 +181,40 @@ final class ConverterTests {
             return 255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * pow(c, 1 / 2.4) - 0.055)
         }
         let converter = Converter()
-        let result = try converter.convert(source, to: directory, options: .init(mode: .sdr))
+        let result = try converter.convert(source, to: directory, options: .init(mode: .sdr, toneStyle: .camera))
         let output = try XCTUnwrap(CIImage(contentsOf: result.files[0]))
-        let preview = CIImage(cgImage: try converter.preview(source))
+        let preview = CIImage(cgImage: try converter.preview(source, toneStyle: .camera))
         for image in [output, preview] {
             var actual = [UInt8](repeating: 0, count: 4)
             context.render(image, toBitmap: &actual, rowBytes: 4, bounds: patch, format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
             for channel in 0..<3 { XCTAssertTrue(abs(Float(actual[channel]) - expected[channel]) <= 3) }
         }
+    }
+
+    func testNaturalTonePreservesBrightDetailAndExposure() throws {
+        let space = CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!
+        let context = CIContext(options: [.workingColorSpace: space, .workingFormat: CIFormat.RGBAf])
+        var previous: Float = 0
+        for value in [Float(0.5), 1, 2, 4.926] {
+            let input = CIImage(color: CIColor(red: CGFloat(value), green: CGFloat(value), blue: CGFloat(value), colorSpace: space)!).cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
+            let mapped = try NaturalTone.apply(input)
+            var pixel = [Float](repeating: 0, count: 4)
+            context.render(mapped, toBitmap: &pixel, rowBytes: 16, bounds: input.extent, format: .RGBAf, colorSpace: space)
+            XCTAssertTrue(pixel[0] > previous + 0.001 && pixel[0] < 0.99)
+            XCTAssertTrue(abs(pixel[0] - pixel[1]) < 0.001 && abs(pixel[1] - pixel[2]) < 0.001)
+            previous = pixel[0]
+        }
+        let source = try fixture()
+        let converter = Converter()
+        func rightPatch(_ cg: CGImage) -> Int {
+            var pixel = [UInt8](repeating: 0, count: 4)
+            context.render(CIImage(cgImage: cg), toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 48, y: 24, width: 1, height: 1), format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+            return Int(pixel[0]) + Int(pixel[1]) + Int(pixel[2])
+        }
+        let normal = try converter.preview(source)
+        let darker = try converter.preview(source, sdrExposure: -1)
+        XCTAssertTrue(rightPatch(darker) < rightPatch(normal))
+        XCTAssertThrowsError(try converter.preview(source, sdrExposure: .nan))
     }
 
 }

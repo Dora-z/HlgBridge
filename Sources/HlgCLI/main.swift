@@ -1,22 +1,27 @@
 import Foundation
 import HlgCore
 
-let args = Array(CommandLine.arguments.dropFirst())
+var args = Array(CommandLine.arguments.dropFirst())
 do {
+    var exposure: Double = 0
+    if let index = args.firstIndex(of: "--exposure") {
+        guard index + 1 < args.count, let value = Double(args[index + 1]), value.isFinite, (-3...3).contains(value) else { throw BridgeError("曝光补偿应在 -3 到 +3 EV 之间。") }
+        exposure = value; args.removeSubrange(index...index + 1)
+    }
     if args.count == 2 && args[0] == "--verify" {
         print(try Converter.verifyHDR(URL(fileURLWithPath: args[1])))
     } else {
         guard args.count >= 2 else {
-            throw BridgeError("用法：hlgbridge-cli 输入文件或目录 输出目录 [--sdr|--hdr] [--keep-gps] [--assume-hlg] [--standard|--subject]\n      hlgbridge-cli --verify HDR.jpg")
+            throw BridgeError("用法：hlgbridge-cli 输入文件或目录 输出目录 [--sdr|--hdr] [--keep-gps] [--assume-hlg] [--camera|--standard|--subject] [--exposure EV]\n      hlgbridge-cli --verify HDR.jpg")
         }
-        let allowed = Set(["--sdr", "--hdr", "--keep-gps", "--assume-hlg", "--standard", "--subject"])
-        guard args.dropFirst(2).allSatisfy({ allowed.contains($0) }), !(args.contains("--sdr") && args.contains("--hdr")), !(args.contains("--standard") && args.contains("--subject")) else { throw BridgeError("命令行选项无效。") }
+        let allowed = Set(["--sdr", "--hdr", "--keep-gps", "--assume-hlg", "--standard", "--subject", "--camera"])
+        guard args.dropFirst(2).allSatisfy({ allowed.contains($0) }), !(args.contains("--sdr") && args.contains("--hdr")), args.filter({ ["--camera", "--standard", "--subject"].contains($0) }).count <= 1 else { throw BridgeError("命令行选项无效。") }
         let source = URL(fileURLWithPath: args[0]), output = URL(fileURLWithPath: args[1], isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let files = PhotoScanner.collect([source])
         guard !files.isEmpty else { throw BridgeError("未找到 HEIF 照片。") }
         let options = ConversionOptions(mode: args.contains("--sdr") ? .sdr : args.contains("--hdr") ? .hdr : .both,
-                                        keepGPS: args.contains("--keep-gps"), assumeHLG: args.contains("--assume-hlg"), toneStyle: args.contains("--standard") ? .standard : args.contains("--subject") ? .subject : .camera)
+                                        keepGPS: args.contains("--keep-gps"), assumeHLG: args.contains("--assume-hlg"), toneStyle: args.contains("--standard") ? .standard : args.contains("--subject") ? .subject : args.contains("--camera") ? .camera : .natural, sdrExposure: exposure)
         var failed = false
         for file in files {
             do {

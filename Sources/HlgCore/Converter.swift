@@ -22,6 +22,14 @@ public final class Converter {
                          depth: p[kCGImagePropertyDepth as String] as? Int ?? 8,
                          profile: profile, kind: classify(profile))
     }
+    public static func embeddedThumbnail(_ url: URL) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: false,
+            kCGImageSourceCreateThumbnailFromImageIfAbsent: false,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 160] as CFDictionary)
+    }
     public static func classify(_ profile: String) -> ColorKind {
         let name = profile.lowercased()
         if name.contains("hlg") { return .hlg }
@@ -50,21 +58,25 @@ public final class Converter {
         }
         return (image.transformed(by: CGAffineTransform(translationX: -bounds.minX, y: -bounds.minY)), info, properties)
     }
-    private func sdrImage(_ image: CIImage, hdr: Bool, toneStyle: ToneStyle, subjectLift: Double) throws -> CIImage {
+    private func sdrImage(_ image: CIImage, hdr: Bool, toneStyle: ToneStyle, subjectLift: Double, exposure: Double) throws -> CIImage {
         guard hdr else { return image }
-        if toneStyle == .camera { return try CameraTone.apply(image) }
+        guard exposure.isFinite, (-3...3).contains(exposure) else { throw BridgeError("曝光补偿应在 -3 到 +3 EV 之间。") }
+        let gain = Float(pow(2.0, exposure))
+        let adjusted = exposure == 0 ? image : image.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: exposure])
+        if toneStyle == .natural { return try NaturalTone.apply(adjusted) }
+        if toneStyle == .camera { return try CameraTone.apply(adjusted) }
         let filter = CIFilter.toneMapHeadroom()
-        filter.inputImage = image
-        filter.sourceHeadroom = image.contentHeadroom > 1 ? image.contentHeadroom : 1000 / 203
+        filter.inputImage = adjusted
+        filter.sourceHeadroom = max(1, (image.contentHeadroom > 1 ? image.contentHeadroom : 1000 / 203) * gain)
         filter.targetHeadroom = 1
         let mapped = filter.outputImage ?? image
         return toneStyle == .subject ? try SubjectTone.apply(mapped, strength: subjectLift) : mapped
     }
-    public func preview(_ url: URL, assumeHLG: Bool = false, toneStyle: ToneStyle = .camera, subjectLift: Double = 0.65) throws -> CGImage {
+    public func preview(_ url: URL, assumeHLG: Bool = false, toneStyle: ToneStyle = .natural, subjectLift: Double = 0.65, sdrExposure: Double = 0) throws -> CGImage {
         let (input, info, _) = try load(url, assumeHLG: assumeHLG)
         let scale = min(1, 1400 / max(input.extent.width, input.extent.height))
         let isHDR = info.kind == .hlg || (info.kind == .unknown && assumeHLG)
-        let image = try sdrImage(input, hdr: isHDR, toneStyle: toneStyle, subjectLift: subjectLift)
+        let image = try sdrImage(input, hdr: isHDR, toneStyle: toneStyle, subjectLift: subjectLift, exposure: sdrExposure)
             .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         return try renderSDR(image, materialize: isHDR)
     }
@@ -103,7 +115,7 @@ public final class Converter {
         }
         if let tiff = properties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
             var clean = tiff.filter { ["Make", "Model", "DateTime", "Artist", "Copyright"].contains($0.key) }
-            clean["Orientation"] = 1; clean["Software"] = "HlgBridge 1.1"
+            clean["Orientation"] = 1; clean["Software"] = "HlgBridge 1.2"
             output[kCGImagePropertyTIFFDictionary as String] = clean
         }
         if keepGPS { output[kCGImagePropertyGPSDictionary as String] = properties[kCGImagePropertyGPSDictionary as String] }
@@ -139,7 +151,7 @@ public final class Converter {
         let (input, info, props) = try load(source, assumeHLG: options.assumeHLG)
         let isHDR = info.kind == .hlg || (info.kind == .unknown && options.assumeHLG)
         if !isHDR && options.mode == .hdr { throw BridgeError("这是 SDR 照片，不能生成真实 HDR；请选择普通 JPEG 或同时导出。") }
-        let sdr = try jpeg(sdrImage(input, hdr: isHDR, toneStyle: options.toneStyle, subjectLift: options.subjectLift), properties: props, keepGPS: options.keepGPS, renderedHDR: isHDR)
+        let sdr = try jpeg(sdrImage(input, hdr: isHDR, toneStyle: options.toneStyle, subjectLift: options.subjectLift, exposure: options.sdrExposure), properties: props, keepGPS: options.keepGPS, renderedHDR: isHDR)
         try cancellation.check()
         var pending: [(String, Data)] = []
         if options.mode != .hdr { pending.append(("SDR", sdr)) }

@@ -34,6 +34,7 @@ let cases: [(String, (ConverterTests) throws -> Void)] = [
     ("主体提亮 / 中性色 / 黑白端点 / SDR 不变", { try $0.testSubjectTonePreservesEndpointsAndRaisesMidtones() }),
     ("机内近似 / 灰阶单调 / 高光 / SDR 不变", { try $0.testCameraToneMonotonicNeutralAndSDRBypass() }),
     ("导出与预览不重复压暗 HDR", { try $0.testExportedSDRDoesNotRemapHDRTwice() }),
+    ("自然模式保留亮部层次 / 曝光补偿", { try $0.testNaturalTonePreservesBrightDetailAndExposure() }),
     ("递归扫描去重", { try $0.testRecursiveScannerDeduplicates() })
 ]
 for (name, test) in cases {

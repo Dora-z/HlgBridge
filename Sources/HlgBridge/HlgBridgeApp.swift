@@ -61,7 +61,7 @@ struct ContentView: View {
                                     }.frame(width: 58, height: 48).clipped().clipShape(RoundedRectangle(cornerRadius: 6))
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(row.url.lastPathComponent).font(.system(.body, weight: .medium)).lineLimit(1)
-                                        Text(row.info.map { "\($0.kind.rawValue) · \($0.width) × \($0.height)" } ?? "无法读取").font(.caption).foregroundStyle(.secondary)
+                                        Text(row.info.map { "\($0.kind.rawValue) · \($0.width) × \($0.height)" } ?? (row.failed ? "无法读取" : "读取信息…")).font(.caption).foregroundStyle(.secondary)
                                         Text(row.status).font(.caption).foregroundStyle(row.failed ? .red : .secondary).lineLimit(2)
                                     }
                                     Spacer(minLength: 0)
@@ -90,8 +90,12 @@ struct ContentView: View {
                         Picker("SDR 观感", selection: $model.toneStyle) {
                             ForEach(ToneStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                         }.onChange(of: model.toneStyle) { _, _ in model.updatePreview() }
+                        if model.toneStyle == .natural {
+                            Text("柔和压缩高光，保留亮部层次；可用 SDR 曝光补偿微调。")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         if model.toneStyle == .camera {
-                            Text("依据 L10 机内 JPEG 对照，优先匹配主体亮度与高光；其他场景仍需验证。")
+                            Text("基于单张室外照片的近似曲线，可能使室内照片偏亮；建议先用自然模式。")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         if model.toneStyle == .subject {
@@ -104,6 +108,14 @@ struct ContentView: View {
                             }
                             Text("改善暗部观感，非松下 MODE2 精确复刻；仅影响 SDR 及 HDR 文件的 SDR 底图。")
                                 .font(.caption).foregroundStyle(.secondary)
+                        }
+                        HStack {
+                            Text("SDR 曝光").font(.caption)
+                            Slider(value: $model.sdrExposure, in: -3...3, step: 0.1) { editing in
+                                if !editing { model.updatePreview() }
+                            }
+                            Text(String(format: "%+.1f EV", model.sdrExposure)).font(.caption.monospacedDigit()).frame(width: 66)
+                            Button("重置") { model.sdrExposure = 0; model.updatePreview() }.font(.caption)
                         }
                         Picker("输出格式", selection: $model.mode) {
                             ForEach(OutputMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
