@@ -1,0 +1,12 @@
+.build/
+dist/
+.DS_Store
+.swiftpm/
+*.HIF
+*.hif
+*.HEIF
+*.heif
+*.HEIC
+*.heic
+*_SDR*.jpg
+*_HDR*.jpg
