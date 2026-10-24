@@ -4,6 +4,8 @@
 
 ## 使用
 
+Mac 用户从 [Releases](https://github.com/Dora-z/HlgBridge/releases) 下载 `.dmg`，打开后将左侧 HlgBridge 拖入右侧「应用程序」，再从「应用程序」打开。安装完成后可推出磁盘。Windows 用户下载 ZIP 并完整解压。
+
 1. 打开 Mac 的 `HlgBridge.app` 或 Windows 的 `HlgBridge.exe`，拖入 `.HIF`、`.HEIF`、`.HEIC` 照片或文件夹。
 2. 选择普通 JPEG、HDR JPEG 或同时导出（默认）。
 3. 选择 SDR 观感：默认「自然 · 保留高光」，可用 SDR 曝光补偿微调；另保留机内近似、主体明亮和系统映射。
@@ -22,7 +24,7 @@
 
 ## 构建 macOS 版
 
-需要 macOS 15+、Xcode Command Line Tools（Swift 6+）、Git 和 CMake 3.15+。无须安装完整 Xcode。应用按当前 Mac 架构构建；Intel 和 Apple Silicon 应分别构建。
+需要 macOS 15+、Xcode Command Line Tools（Swift 6+）、Git、CMake 3.15+ 和 Python 3.10+（仅制作 DMG 时使用）。无须安装完整 Xcode。应用按当前 Mac 架构构建；Intel 和 Apple Silicon 应分别构建。
 
 ```sh
 # 没有 CMake 时，可以安装到项目构建目录
@@ -33,7 +35,9 @@ swift run HlgChecks
 open dist/HlgBridge.app
 ```
 
-产物：`dist/HlgBridge.app`、`dist/HlgBridge-macOS.zip` 和命令行工具 `dist/hlgbridge-cli`。原生库静态链接，运行时不需要 Python、CMake、Homebrew 或联网。应用仅做本地 ad-hoc 签名，不包含 Developer ID 签名、公证或 App Store 发布。
+产物：`dist/HlgBridge.app`、`dist/HlgBridge-v版本-macOS-架构.dmg`、DMG 的 `.sha256` 校验文件、备用 `dist/HlgBridge-macOS.zip` 和命令行工具 `dist/hlgbridge-cli`。DMG 使用中文安装提示、自定义背景和 Applications 快捷方式，可直接拖拽安装；Finder 布局由 dmgbuild 写入，无须控制 Finder。
+
+`Scripts/build-dmg.sh` 可单独将现有 `dist/HlgBridge.app` 打包；首次会在 `.build/dmg-venv` 安装固定版本的打包依赖。可用 `PYTHON_BIN=/path/to/python3 ./Scripts/build-app.sh` 指定 Python。原生库静态链接，运行时不需要 Python、CMake、Homebrew 或联网。应用仅做本地 ad-hoc 签名，不包含 Developer ID 签名、公证或 App Store 发布。
 
 构建依赖固定为 Google libultrahdr **v2.0.2**，提交 `e5f5a022fe96fc4dc2ee35c19f733a50df807abe`；其上游构建固定 libjpeg-turbo 3.1.0。首次构建需要联网下载依赖。
 

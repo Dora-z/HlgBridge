@@ -31,3 +31,4 @@ PLIST
 codesign --force --sign - "$APP"
 ditto -c -k --sequesterRsrc --keepParent "$APP" dist/HlgBridge-macOS.zip
 printf '应用已生成：%s\n' "$APP"
+Scripts/build-dmg.sh "$APP"

@@ -16,6 +16,12 @@
 
 Apple 的 SwiftUI、Core Image、ImageIO 和 ColorSync 是系统框架，不随本项目重新分发。
 
+## macOS DMG 构建工具
+
+- dmgbuild 1.6.7、ds_store 1.3.3、mac_alias 2.2.3：MIT 许可证，仅在构建环境使用，不随应用分发。
+- 来源：https://github.com/dmgbuild/dmgbuild、https://github.com/dmgbuild/ds_store、https://github.com/dmgbuild/mac_alias。
+- 固定版本见 `Scripts/dmg-requirements.txt`。安装窗口背景由 `Scripts/dmg-background.swift` 绘制。
+
 
 ## Windows 版依赖
 
