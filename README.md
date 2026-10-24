@@ -1,10 +1,10 @@
 # HlgBridge
 
-中文 macOS 桌面工具，将松下相机的 HLG HEIF 照片批量转换为普通 sRGB JPEG 和 Ultra HDR JPEG。照片只在本机处理，原片不变。
+中文 macOS / Windows 桌面工具，将松下相机的 HLG HEIF 照片批量转换为普通 sRGB JPEG 和 Ultra HDR JPEG。照片只在本机处理，原片不变。
 
 ## 使用
 
-1. 打开 `HlgBridge.app`，拖入 `.HIF`、`.HEIF`、`.HEIC` 照片或文件夹。
+1. 打开 Mac 的 `HlgBridge.app` 或 Windows 的 `HlgBridge.exe`，拖入 `.HIF`、`.HEIF`、`.HEIC` 照片或文件夹。
 2. 选择普通 JPEG、HDR JPEG 或同时导出（默认）。
 3. 选择 SDR 观感：默认「机内转换近似」；也可选择可调的「主体明亮」（强度默认 65%）或「系统映射」。
 4. 选择输出目录，点击「开始转换」。
@@ -19,7 +19,7 @@
 - 单张失败后继续下一张。取消会在当前编解码步骤结束后生效，并清理当前图片未完成输出；已完成的其他图片保留。
 - 预览为 SDR 色调映射结果，不是手机 HDR 显示模拟。队列小缩略图由系统生成。
 
-## 构建
+## 构建 macOS 版
 
 需要 macOS 15+、Xcode Command Line Tools（Swift 6+）、Git 和 CMake 3.15+。无须安装完整 Xcode。应用按当前 Mac 架构构建；Intel 和 Apple Silicon 应分别构建。
 
@@ -36,7 +36,39 @@ open dist/HlgBridge.app
 
 构建依赖固定为 Google libultrahdr **v2.0.2**，提交 `e5f5a022fe96fc4dc2ee35c19f733a50df807abe`；其上游构建固定 libjpeg-turbo 3.1.0。首次构建需要联网下载依赖。
 
-### 命令行
+## Windows 版（1.2.0）
+
+支持 Windows 10/11 x64。便携版完整解压后运行 `HlgBridge.exe`，保留同目录 `_internal` 文件夹；运行时无需安装 Python、Homebrew 或系统 HEVC 扩展。支持文件 / 文件夹拖入、批量转换、SDR 预览、取消、Exif/GPS 开关、重名自动编号和同一套应用图标。
+
+Windows 使用 PySide6 Widgets 界面、pillow-heif/libheif 的 10/12 位解码、NumPy 浮点色彩处理，以及与 Mac 共用的 libultrahdr 原生封装。HLG 经 BT.2100 逆 OETF 与 1000-nit / gamma 1.2 的 OOTF 转到线性 BT.2020（参考白 203 nits），再执行相同的「机内转换近似」曲线；不会提前降成 8 位。两套解码器和色彩管理存在小差异，不承诺逐像素相同。
+
+Windows 另提供「主体明亮」「保留高光」两种可移植观感；「保留高光」不调用 Apple 系统映射。Mac 界面和原有三种模式保持独立。
+
+### 下载和自行构建
+
+[GitHub Actions → Build Windows](https://github.com/Dora-z/HlgBridge/actions/workflows/windows.yml) 每次相关源码更新会在 Windows runner 上构建、运行测试和打包。成功后在该次运行的 Artifacts 中下载 `HlgBridge-Windows-x64`。构建产物名为 `HlgBridge-v1.2.0-Windows-x64.zip`。
+
+自行构建需要 Windows、Python 3.12 x64、CMake 3.24+、Git 和 Visual Studio 2022 C++ Build Tools（含 Windows SDK），在项目根目录运行：
+
+```powershell
+./Scripts/build-windows.ps1
+```
+
+脚本在项目 `.build/windows-venv` 创建隔离环境、编译 HDR DLL、执行 10 组引擎测试，再检查源码和打包后的 Qt 应用能解码合成的 10 位 HEIF、导出双格式并恢复 HDR。最终 ZIP 位于 `dist/`；无需 Python 的用户只需下载便携包。该版本未作 Windows 代码签名。
+
+Windows 源码命令行用法（先安装 `Windows/requirements.txt` 并构建 HDR DLL）：
+
+```powershell
+$env:PYTHONPATH = "Windows"
+$env:HLGBRIDGE_CODEC = "$PWD/.build/windows-native/Release/hlgcodec.dll"
+python -m hlgbridge C:/Photos C:/Converted
+python -m hlgbridge C:/Photos C:/Converted --mode sdr --tone camera
+python -m hlgbridge C:/Converted/photo_HDR.jpg --verify
+```
+
+本机用同一张 L10 原片验证可移植引擎，机内 JPEG 对照的平均 RGB 差约 3.5/255（Mac 版为 3.6/255，同一校准样本）；两种输出均保持 5408 × 3608，HDR 增益图可完整解码。照片和参考 JPEG 不进入 GitHub 或 CI；云端只使用合成图。
+
+### macOS 命令行
 
 ```sh
 dist/hlgbridge-cli /path/to/photos /path/to/output
@@ -76,6 +108,7 @@ HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用
 | Panasonic DC-L10 / 固件 1.2 / 10 位 BT.2100 HLG | 已确认系统解码支持；双格式全分辨率输出与 HDR 解码已验证；原片不入库 |
 | 小米 13 / HyperOS 4.0.0.32 / 相册 5.4.2.10-0907-cn | **待实机验收，未宣称 HDR 适配成功** |
 | Apple Silicon | 源码支持，待独立构建验证 |
+| Windows 10/11 x64 | 便携引擎通过本地测试；Windows 自动构建状态见 Actions |
 
 手机验收：用不会压缩或重编码的文件传输方式复制两种 JPEG，先确认 SDR 的亮度、色彩和方向正常，再观察 HDR 成品在相册中是否触发高动态显示；同时检查拍摄日期排序。分享平台可能移除增益图，应另行验证。
 
@@ -84,7 +117,8 @@ HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用
 - `HlgCore`：检测、色彩处理、元数据和安全输出。
 - `CHDR`：libultrahdr 的 C 接口封装。
 - `HlgBridge`：SwiftUI 界面与批处理任务。
-- `HlgCLI`：批处理和 HDR 解码验证工具。
+- `HlgCLI`：Mac 批处理和 HDR 解码验证工具。
+- `Windows/`：Windows 界面、可移植色彩引擎、原生 DLL 构建与测试。
 
 第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。个人照片、生成图片、应用包和构建缓存不提交到仓库。
 

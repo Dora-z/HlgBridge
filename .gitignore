@@ -10,3 +10,7 @@ dist/
 *.heic
 *_SDR*.jpg
 *_HDR*.jpg
+
+__pycache__/
+*.pyc
+*.spec

@@ -1,0 +1,22 @@
+HlgBridge 1.2.0 · Windows 64 位版
+
+先将 ZIP 完整解压到一个文件夹，再打开 HlgBridge.exe。
+请保留同目录的 _internal 文件夹，运行时不需要另外安装 Python 或 HEVC 扩展。
+
+1. 添加或拖入 HIF、HEIF、HEIC 照片 / 文件夹。
+2. 选择输出目录，默认同时导出普通 JPEG 和 Ultra HDR JPEG。
+3. 选择 SDR 观感，默认“机内转换近似”。
+4. 点击“开始转换”。
+
+原片不变；重名自动编号；GPS 默认移除；保留拍摄时间和常见曝光信息。
+取消会在当前编解码步骤结束后生效。已完成的照片保留，当前未完成输出清理。
+
+“机内转换近似”与 Mac 版采用相同的全局亮度曲线，但两套解码及色彩管理实现
+存在小差异，不能保证逐像素相同。Windows 的“保留高光”是独立的可移植曲线，
+不是 Apple 的系统映射。
+
+HDR JPEG 含 SDR 底图；HDR 显示取决于设备、屏幕和查看器。
+机内观感仅在一组 L10 原片上校准。小米相册 HDR 显示仍需实机确认。
+
+项目：https://github.com/Dora-z/HlgBridge
+依赖许可证位于 _internal/Licenses；程序未包含 Windows 代码签名。
