@@ -48,7 +48,7 @@ class Options:
     assume_hlg: bool = False
 
     def validate(self):
-        if self.mode not in {"sdr", "hdr", "both"} or self.tone not in {"natural", "camera", "subject", "highlight"}:
+        if self.mode not in {"sdr", "hdr", "both"} or self.tone not in {"natural", "camera-highlight", "camera", "subject", "highlight"}:
             raise ValueError("输出模式无效。")
         if not np.isfinite(self.exposure) or not -3 <= self.exposure <= 3:
             raise ValueError("曝光补偿应在 -3 到 +3 EV 之间。")
@@ -153,8 +153,14 @@ def map_sdr(linear: np.ndarray, options: Options) -> np.ndarray:
         rgb = target[..., None] + chroma[..., None] * (rgb - target[..., None])
         return srgb_encode(rgb)
     y = np.maximum(linear @ WEIGHTS, 0)
-    if options.tone == "camera":
-        target = np.minimum(3.30 * y / (1 + 2.10 * y), 1)
+    if options.tone in {"camera", "camera-highlight"}:
+        camera = 3.30 * y / (1 + 2.10 * y)
+        if options.tone == "camera-highlight":
+            knee = np.float32(0.70)
+            target = np.where(camera <= knee, camera,
+                              knee + (1 - knee) * -np.expm1(-np.maximum(camera - knee, 0) / (1 - knee)))
+        else:
+            target = np.minimum(camera, 1)
         black_gain = 3.30
     else:
         # Portable highlight-preserving rendition; not Apple's private system mapping.
@@ -165,7 +171,13 @@ def map_sdr(linear: np.ndarray, options: Options) -> np.ndarray:
             target = target ** (1 - 0.6 * options.strength)
         black_gain = 0.0
     gain = np.divide(target, y, out=np.full_like(y, black_gain), where=y > 1e-8)
-    return srgb_encode((linear * gain[..., None]) @ BT2020_TO_709.T)
+    rgb = (linear * gain[..., None]) @ BT2020_TO_709.T
+    if options.tone == "camera-highlight":
+        peak, low = np.max(rgb, axis=-1), np.min(rgb, axis=-1)
+        chroma = np.minimum(1, (1 - target) / np.maximum(peak - target, 1e-8))
+        chroma = np.minimum(chroma, target / np.maximum(target - low, 1e-8))
+        rgb = target[..., None] + chroma[..., None] * (rgb - target[..., None])
+    return srgb_encode(rgb)
 
 
 def _exif(metadata: dict, size: tuple[int, int], keep_gps: bool) -> bytes:

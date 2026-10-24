@@ -50,5 +50,8 @@ if ($Process.ExitCode -ne 0 -or -not (Test-Path $Report)) { throw "Packaged app 
 $Smoke = Get-Content $Report -Raw | ConvertFrom-Json
 if (-not $Smoke.success) { throw "Packaged app self-test failed: $($Smoke.error)" }
 Copy-Item Windows/使用说明.txt dist/windows/HlgBridge/使用说明.txt
-Compress-Archive -Path dist/windows/HlgBridge -DestinationPath dist/HlgBridge-v1.2.0-Windows-x64.zip -Force
-Write-Host "Built: dist/HlgBridge-v1.2.0-Windows-x64.zip"
+$Version = & $PythonExe -c "from hlgbridge import __version__; print(__version__)"
+if ($LASTEXITCODE -ne 0) { throw "Could not read package version." }
+$Archive = "dist/HlgBridge-v$Version-Windows-x64.zip"
+Compress-Archive -Path dist/windows/HlgBridge -DestinationPath $Archive -Force
+Write-Host "Built: $Archive"

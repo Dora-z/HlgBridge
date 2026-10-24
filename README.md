@@ -8,7 +8,7 @@ Mac 用户从 [Releases](https://github.com/Dora-z/HlgBridge/releases) 下载 `.
 
 1. 打开 Mac 的 `HlgBridge.app` 或 Windows 的 `HlgBridge.exe`，拖入 `.HIF`、`.HEIF`、`.HEIC` 照片或文件夹。
 2. 选择普通 JPEG、HDR JPEG 或同时导出（默认）。
-3. 选择 SDR 观感：默认「自然 · 保留高光」，可用 SDR 曝光补偿微调；另保留机内近似、主体明亮和系统映射。
+3. 选择 SDR 观感：默认「自然 · 保留高光」，可用 SDR 曝光补偿微调；新增「机内近似 · 保留高光」，原版机内近似、主体明亮和系统映射仍保留。
 4. 选择输出目录，点击「开始转换」。
 
 普通 JPEG 适合相册、分享和打印。HDR JPEG 含普通 SDR 底图与增益图，兼容的查看器可恢复高光；不支持 HDR 的查看器显示 SDR 底图。HDR 屏幕本身不代表相册一定兼容 Ultra HDR。
@@ -59,7 +59,7 @@ Windows 另提供「主体明亮」「保留高光」两种可移植观感；「
 ./Scripts/build-windows.ps1
 ```
 
-脚本在项目 `.build/windows-venv` 创建隔离环境、编译 HDR DLL、执行 11 组引擎测试，再检查源码和打包后的 Qt 应用能解码合成的 10 位 HEIF、导出双格式并恢复 HDR，以及后台批处理和窗口关闭。最终 ZIP 位于 `dist/`；无需 Python 的用户只需下载便携包。该版本未作 Windows 代码签名。
+脚本在项目 `.build/windows-venv` 创建隔离环境、编译 HDR DLL、执行 13 组引擎测试，再检查源码和打包后的 Qt 应用能解码合成的 10 位 HEIF、导出双格式并恢复 HDR，以及后台批处理和窗口关闭。最终 ZIP 位于 `dist/`；无需 Python 的用户只需下载便携包。该版本未作 Windows 代码签名。
 
 Windows 源码命令行用法（先安装 `Windows/requirements.txt` 并构建 HDR DLL）：
 
@@ -79,6 +79,7 @@ python -m hlgbridge C:/Converted/photo_HDR.jpg --verify
 dist/hlgbridge-cli /path/to/photos /path/to/output
 dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --sdr --exposure -0.5
 dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --sdr --camera
+dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --sdr --camera-highlight
 dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --sdr --standard
 dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --sdr --subject
 dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --hdr --keep-gps
@@ -91,14 +92,15 @@ dist/hlgbridge-cli --verify /path/to/photo_HDR.jpg
 
 ImageIO 读取色彩配置和拍摄信息，Core Image 以扩展线性 BT.2020、半精度浮点处理，不提前截断为 8 位。
 
-HLG 的 SDR 输出提供四种观感：
+HLG 的 SDR 输出提供五种观感：
 
 - **自然 · 保留高光（默认）**：在目标线性 sRGB 色域中使用连续软肩曲线 `2Y / (1 + 2Y)`，并压缩越界的高亮色度，避免固定阈值截白。
+- **机内近似 · 保留高光（1.2.1 新增）**：保留机内近似的暗部和中间调，在线性亮度 0.70 后接连续软肩 `0.70 + 0.30 × (1 − exp(−(C − 0.70)/0.30))`，其中 `C = 3.30Y/(1 + 2.10Y)` 为未截白的机内近似结果。接点亮度和斜率连续，亮部保持递增；再沿中性色轴压缩超出 sRGB 的颜色，避免色彩转换时截断通道。它是可选的新模式，不替换原版。
 - **机内转换近似（可选，偏亮）**：依据一组 DC-L10 HLG 与机内 JPEG 的对应像素得到经验曲线。在线性 BT.2020 中，亮度 `Y = 0.2627R + 0.6780G + 0.0593B`，目标亮度 `min(3.30Y / (1 + 2.10Y), 1)`，再以亮度比缩放 RGB。两个全局系数用于提亮主体并压缩高光，没有从单张照片拟合白平衡或颜色矩阵。室内人物照片可能偏亮，不能视为松下算法的精确复刻。
 - **系统映射**：macOS 15 的 `CIToneMapHeadroom`，目标 headroom 为 1。
 - **主体明亮**：系统映射后额外抬升暗部及中间调，强度可调，保持黑白端点和中性色，高亮超出色域时压缩饱和度。
 
-四种结果都先生成线性半精度 SDR 中间图像，明确标记 headroom 为 1，再转成带 ICC 配置的 8 位 sRGB JPEG，避免从 HDR 滤镜图直接导出到 sRGB 时再次改变亮度。预览使用相同路径。-3 到 +3 EV 的曝光补偿和所有观感只影响 HLG 的 SDR 输出与 HDR 文件的 SDR 底图，不改变原始 HDR 目标像素；SDR 原片直接走正常色彩转换。
+五种结果都先生成线性半精度 SDR 中间图像，明确标记 headroom 为 1，再转成带 ICC 配置的 8 位 sRGB JPEG，避免从 HDR 滤镜图直接导出到 sRGB 时再次改变亮度。预览使用相同路径。-3 到 +3 EV 的曝光补偿和所有观感只影响 HLG 的 SDR 输出与 HDR 文件的 SDR 底图，不改变原始 HDR 目标像素；SDR 原片直接走正常色彩转换。
 
 HDR 路径将原始线性 HDR 像素和**已经编码的同一张 SDR JPEG**传给 libultrahdr，生成多通道增益图（1/2 分辨率，质量 95）。启用 XMP 与 ISO 21496-1 两种增益图元数据。不会将 HDR 成品再交给普通 JPEG 编码器，以免丢失增益图。
 
@@ -108,7 +110,7 @@ HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用
 
 ## 验证和兼容性
 
-测试通过独立 Swift 可执行检查器运行，不依赖仅完整 Xcode 提供的 XCTest。自动测试使用运行时生成的合成 HEIF，不包含个人照片。目前 11 组检查覆盖双输出、增益图解码、SDR 底图一致性、方向、Exif、GPS、未知配置、损坏文件、重名、取消、无写入权限、灰阶单调、中性色、最终 JPEG/预览不会再次压暗，以及自然模式高光和曝光补偿。
+测试通过独立 Swift 可执行检查器运行，不依赖仅完整 Xcode 提供的 XCTest。自动测试使用运行时生成的合成 HEIF，不包含个人照片。目前 13 组检查覆盖双输出、增益图解码、SDR 底图一致性、方向、Exif、GPS、未知配置、损坏文件、重名、取消、无写入权限、灰阶单调、中性色、最终 JPEG/预览不会再次压暗，以及自然模式高光和曝光补偿。
 
 | 环境 | 状态 |
 |---|---|
@@ -116,7 +118,7 @@ HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用
 | Panasonic DC-L10 / 固件 1.2 / 10 位 BT.2100 HLG | 已确认系统解码支持；双格式全分辨率输出与 HDR 解码已验证；原片不入库 |
 | 小米 13 / HyperOS 4.0.0.32 / 相册 5.4.2.10-0907-cn | **待实机验收，未宣称 HDR 适配成功** |
 | Apple Silicon | 源码支持，待独立构建验证 |
-| Windows 10（1809+）/11 x64 | Windows runner 编译、11 组引擎测试及打包应用自检已通过；最新构建见 Actions |
+| Windows 10（1809+）/11 x64 | Windows runner 编译、13 组引擎测试及打包应用自检已通过；最新构建见 Actions |
 
 手机验收：用不会压缩或重编码的文件传输方式复制两种 JPEG，先确认 SDR 的亮度、色彩和方向正常，再观察 HDR 成品在相册中是否触发高动态显示；同时检查拍摄日期排序。分享平台可能移除增益图，应另行验证。
 
@@ -154,7 +156,7 @@ HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用
 swift Scripts/compare-reference.swift /path/to/camera.jpg /path/to/export_SDR.jpg
 ```
 
-原生界面交互检查尚未完成（当前电脑控制权限未授予），小米相册 HDR 显示仍待实机验收。
+Mac 的 DMG 安装窗口已实机检查，应用批处理通过自动测试；小米相册 HDR 显示仍待实机验收。
 
 ## 应用图标
 
@@ -165,3 +167,7 @@ swift Scripts/compare-reference.swift /path/to/camera.jpg /path/to/export_SDR.jp
 Mac 队列先显示全部文件名，元数据和内嵌缩略图随后更新，可以在缩略图加载期间开始转换；清空队列会取消后续加载，旧任务不会把已清空的照片加回来。本机 SD 卡目录的 39 张 HIF 实测：文件列表约 0.045 秒出现，全部元数据和内嵌缩略图约 2.8 秒完成，速度随介质变化。
 
 默认自然模式使用柔和高光压缩，Mac 和 Windows 均支持 -3 到 +3 EV 的 SDR 曝光补偿；机内近似仍可选，但可能使室内照片偏亮。用用户反馈的室内原片检查，旧机内近似中约 9.40% 的像素三通道均达到 250/255 以上，新自然模式为 0%。这只是该样本的亮部统计，无法恢复原片中已经丢失的信息。原始 HDR 目标不受 SDR 观感和曝光补偿影响。
+
+## 1.2.1：机内近似也能保留高光
+
+在 SDR 观感中选择「机内近似 · 保留高光」。它保留机内近似的明亮主体和中间调，在亮部柔和收拢；无需通过整体降低曝光来保留亮部层次。原版机内近似与自然模式仍可选择。Mac / Windows 使用相同曲线，HDR 文件的 SDR 底图也会应用此观感，HDR 恢复目标保持原样。

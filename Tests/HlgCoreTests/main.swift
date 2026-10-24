@@ -35,6 +35,8 @@ let cases: [(String, (ConverterTests) throws -> Void)] = [
     ("机内近似 / 灰阶单调 / 高光 / SDR 不变", { try $0.testCameraToneMonotonicNeutralAndSDRBypass() }),
     ("导出与预览不重复压暗 HDR", { try $0.testExportedSDRDoesNotRemapHDRTwice() }),
     ("自然模式保留亮部层次 / 曝光补偿", { try $0.testNaturalTonePreservesBrightDetailAndExposure() }),
+    ("机内高光模式保留中间调 / 灰阶层次 / 色域 / SDR 不变", { try $0.testCameraHighlightRetainsMidtonesAndBrightDetail() }),
+    ("机内高光模式双输出 / HDR 解码 / SDR 底图一致", { try $0.testHLGDualOutputMetadataAndHDRDecode(style: .cameraHighlight) }),
     ("递归扫描去重", { try $0.testRecursiveScannerDeduplicates() })
 ]
 for (name, test) in cases {

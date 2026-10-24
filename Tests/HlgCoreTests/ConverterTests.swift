@@ -35,11 +35,11 @@ final class ConverterTests {
         let source = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))
         return try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any])
     }
-    func testHLGDualOutputMetadataAndHDRDecode() throws {
+    func testHLGDualOutputMetadataAndHDRDecode(style: ToneStyle = .natural) throws {
         let source = try fixture()
         XCTAssertEqual(try Converter.inspect(source).kind, .hlg)
         let before = try Data(contentsOf: source)
-        let result = try Converter().convert(source, to: directory)
+        let result = try Converter().convert(source, to: directory, options: .init(toneStyle: style))
         XCTAssertEqual(result.files.count, 2)
         let sdr = result.files[0], hdr = result.files[1]
         XCTAssertTrue(try Converter.verifyHDR(hdr).contains("64 × 48"))
@@ -189,6 +189,41 @@ final class ConverterTests {
             context.render(image, toBitmap: &actual, rowBytes: 4, bounds: patch, format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
             for channel in 0..<3 { XCTAssertTrue(abs(Float(actual[channel]) - expected[channel]) <= 3) }
         }
+    }
+
+    func testCameraHighlightRetainsMidtonesAndBrightDetail() throws {
+        let space = CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!
+        let context = CIContext(options: [.workingColorSpace: space, .workingFormat: CIFormat.RGBAf])
+        func render(_ color: [Float], protected: Bool, output: CGColorSpace) throws -> [Float] {
+            let input = CIImage(color: CIColor(red: CGFloat(color[0]), green: CGFloat(color[1]), blue: CGFloat(color[2]), colorSpace: space)!).cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
+            let mapped = try protected ? CameraHighlightTone.apply(input) : CameraTone.apply(input)
+            var pixel = [Float](repeating: 0, count: 4)
+            context.render(mapped, toBitmap: &pixel, rowBytes: 16, bounds: input.extent, format: .RGBAf, colorSpace: output)
+            return pixel
+        }
+        // The new mode must actually retain the old look, not simply darken the photo.
+        for rgb: [Float] in [[0, 0, 0], [0.02, 0.02, 0.02], [0.18, 0.18, 0.18], [0.30, 0.30, 0.30], [0.08, 0.12, 0.10]] {
+            let old = try render(rgb, protected: false, output: space)
+            let new = try render(rgb, protected: true, output: space)
+            for channel in 0..<3 { XCTAssertTrue(abs(new[channel] - old[channel]) < 0.0001) }
+        }
+        var previous: Float = 0
+        for value: Float in [0.3825, 0.5, 0.8334, 1, 2, 4.926, 10] {
+            let p = try render([value, value, value], protected: true, output: space)
+            XCTAssertTrue(p[0] > previous + 0.001 && p[0] < 0.99)
+            XCTAssertTrue(abs(p[0] - p[1]) < 0.001 && abs(p[1] - p[2]) < 0.001)
+            previous = p[0]
+        }
+        let destination = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
+        for rgb: [Float] in [[4, 0.1, 0.1], [0.1, 4, 0.1], [0.1, 0.1, 4], [4, 3, 0.1]] {
+            let p = try render(rgb, protected: true, output: destination)
+            XCTAssertTrue(p.prefix(3).allSatisfy { $0.isFinite && $0 >= -0.002 && $0 <= 1.002 })
+        }
+        let sdr = try fixture(hdr: false)
+        let converter = Converter()
+        let original = try converter.convert(sdr, to: directory, options: .init(mode: .sdr, toneStyle: .camera))
+        let protected = try converter.convert(sdr, to: directory, options: .init(mode: .sdr, toneStyle: .cameraHighlight))
+        XCTAssertEqual(try Data(contentsOf: original.files[0]), try Data(contentsOf: protected.files[0]))
     }
 
     func testNaturalTonePreservesBrightDetailAndExposure() throws {

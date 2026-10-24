@@ -134,7 +134,7 @@ class Window(QMainWindow):
         self.assume = QCheckBox("按松下 HLG 处理所选照片（确认来源后启用）")
         right_layout.addWidget(self.assume)
         self.tone = QComboBox()
-        for label, value in [("自然 · 保留高光（默认）", "natural"), ("机内转换近似（偏亮）", "camera"), ("主体明亮", "subject"), ("保留高光", "highlight")]:
+        for label, value in [("自然 · 保留高光（默认）", "natural"), ("机内近似 · 保留高光", "camera-highlight"), ("机内转换近似（原版）", "camera"), ("主体明亮", "subject"), ("保留高光", "highlight")]:
             self.tone.addItem(label, value)
         right_layout.addWidget(QLabel("SDR 观感"))
         right_layout.addWidget(self.tone)

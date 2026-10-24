@@ -5,7 +5,7 @@ public enum OutputMode: String, CaseIterable, Sendable {
     case sdr = "普通 JPEG", hdr = "HDR JPEG", both = "同时导出"
 }
 public enum ToneStyle: String, CaseIterable, Sendable {
-    case natural = "自然 · 保留高光", camera = "机内转换近似", subject = "主体明亮", standard = "系统映射"
+    case natural = "自然 · 保留高光", cameraHighlight = "机内近似 · 保留高光", camera = "机内转换近似", subject = "主体明亮", standard = "系统映射"
 }
 public enum ColorKind: String, Sendable { case hlg = "HDR · HLG", sdr = "SDR", unknown = "未知色彩" }
 public struct PhotoInfo: Sendable {

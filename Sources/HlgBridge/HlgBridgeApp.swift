@@ -94,8 +94,12 @@ struct ContentView: View {
                             Text("柔和压缩高光，保留亮部层次；可用 SDR 曝光补偿微调。")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
+                        if model.toneStyle == .cameraHighlight {
+                            Text("沿用机内近似的暗部和中间调，只柔和压缩亮部，并保护超出 sRGB 色域的高亮颜色。")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         if model.toneStyle == .camera {
-                            Text("基于单张室外照片的近似曲线，可能使室内照片偏亮；建议先用自然模式。")
+                            Text("原版机内近似观感，亮部可能截白；喜欢此观感时可选「机内近似 · 保留高光」。")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         if model.toneStyle == .subject {

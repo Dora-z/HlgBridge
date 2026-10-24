@@ -64,6 +64,7 @@ public final class Converter {
         let gain = Float(pow(2.0, exposure))
         let adjusted = exposure == 0 ? image : image.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: exposure])
         if toneStyle == .natural { return try NaturalTone.apply(adjusted) }
+        if toneStyle == .cameraHighlight { return try CameraHighlightTone.apply(adjusted) }
         if toneStyle == .camera { return try CameraTone.apply(adjusted) }
         let filter = CIFilter.toneMapHeadroom()
         filter.inputImage = adjusted

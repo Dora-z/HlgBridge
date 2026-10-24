@@ -31,6 +31,8 @@ def run(report_path):
         app.processEvents()
         checkpoint("window ready")
         assert window.tone.currentData() == "natural"
+        window.tone.setCurrentIndex(window.tone.findData("camera-highlight"))
+        assert window.options().tone == "camera-highlight"
         with tempfile.TemporaryDirectory(prefix="HlgBridge-检查-") as directory:
             root = Path(directory)
             pixels = np.full((32, 48, 3), 35000, dtype=np.uint16)
@@ -39,7 +41,7 @@ def run(report_path):
             image.save(source, quality=90, save_nclx_profile=True, color_primaries=9,
                        transfer_characteristics=18, matrix_coefficients=9)
             checkpoint("native conversion")
-            files, _ = convert(source, root, Options())
+            files, _ = convert(source, root, Options(tone="camera-highlight"))
             assert verify(files[-1].read_bytes())[:2] == (48, 32)
             with Image.open(files[0]) as opened:
                 assert opened.size == (48, 32)

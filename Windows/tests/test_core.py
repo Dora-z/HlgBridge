@@ -36,11 +36,11 @@ class CoreTests(unittest.TestCase):
                    matrix_coefficients=9 if hdr else 1)
         return path
 
-    def test_hlg_dual_output_native_decode_metadata_and_same_base(self):
+    def test_hlg_dual_output_native_decode_metadata_and_same_base(self, tone="natural"):
         path = self.fixture()
         original = path.read_bytes()
         self.assertEqual(core.inspect(path).kind, "hlg")
-        files, _ = core.convert(path, self.root)
+        files, _ = core.convert(path, self.root, core.Options(tone=tone))
         self.assertEqual(len(files), 2)
         self.assertEqual(codec.verify(files[1].read_bytes())[:2], (48, 32))
         base = np.asarray(Image.open(files[0]).convert("RGB"))
@@ -63,6 +63,13 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(note)
         with self.assertRaises(ValueError):
             core.convert(path, self.root, core.Options(mode="hdr"))
+
+    def test_camera_highlight_dual_output_and_sdr_bypass(self):
+        self.test_hlg_dual_output_native_decode_metadata_and_same_base(tone="camera-highlight")
+        sdr = self.fixture(hdr=False)
+        old, _ = core.convert(sdr, self.root, core.Options(mode="sdr", tone="camera"))
+        new, _ = core.convert(sdr, self.root, core.Options(mode="sdr", tone="camera-highlight"))
+        self.assertEqual(old[0].read_bytes(), new[0].read_bytes())
 
     def test_rotated_pixels_and_gps(self):
         path = self.fixture(orientation=6)
@@ -132,13 +139,30 @@ class CoreTests(unittest.TestCase):
         linear = core.hlg_to_linear(encoded)
         self.assertTrue(np.isfinite(linear).all())
         np.testing.assert_allclose(linear[0, -1], 1000 / 203, rtol=1e-6)
-        for tone in ["natural", "camera", "subject", "highlight"]:
+        for tone in ["natural", "camera-highlight", "camera", "subject", "highlight"]:
             result = core.map_sdr(linear, core.Options(tone=tone))
             self.assertTrue(np.isfinite(result).all())
             self.assertGreaterEqual(float(np.min(np.diff(result[0, :, 0]))), -1e-6)
             self.assertTrue(np.all((result >= 0) & (result <= 1)))
             np.testing.assert_allclose(result[..., 0], result[..., 1], atol=1e-5)
             np.testing.assert_allclose(result[..., 1], result[..., 2], atol=1e-5)
+
+    def test_camera_highlight_preserves_midtones_and_recovers_bright_steps(self):
+        rgb = np.array([[[0, 0, 0], [0.02, 0.02, 0.02], [0.18, 0.18, 0.18],
+                         [0.30, 0.30, 0.30], [0.08, 0.12, 0.10]]], np.float32)
+        old = core.map_sdr(rgb, core.Options(tone="camera"))
+        new = core.map_sdr(rgb, core.Options(tone="camera-highlight"))
+        np.testing.assert_allclose(new, old, atol=1e-6)
+        levels = np.array([0.3825, 0.5, 0.8334, 1, 2, 4.926, 10], np.float32)
+        bright = np.repeat(levels[:, None], 3, axis=1)[None]
+        protected = core.map_sdr(bright, core.Options(tone="camera-highlight"))
+        self.assertTrue(np.all(np.diff(protected[0, :, 0]) > 0.001))
+        self.assertTrue(np.all(protected < 0.999))
+        legacy = core.map_sdr(bright, core.Options(tone="camera"))
+        np.testing.assert_allclose(legacy[0, -4:], 1, atol=1e-6)
+        colors = np.array([[[4, 0.1, 0.1], [0.1, 4, 0.1], [0.1, 0.1, 4], [4, 3, 0.1]]], np.float32)
+        mapped = core.map_sdr(colors, core.Options(tone="camera-highlight"))
+        self.assertTrue(np.isfinite(mapped).all() and np.all((mapped >= 0) & (mapped <= 1)))
 
     def test_natural_retains_bright_detail_and_exposure_control(self):
         levels = np.array([0.5, 1.0, 2.0, 4.926], np.float32)
