@@ -3,7 +3,7 @@ from dataclasses import replace
 import io
 from pathlib import Path
 import sys
-from PySide6.QtCore import QObject, QRunnable, QThread, QThreadPool, Qt, Signal, Slot
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QRunnable, QThread, QThreadPool, Qt, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
     QLabel, QMainWindow, QMessageBox, QProgressBar, QPushButton, QSlider, QSplitter,
@@ -332,7 +332,6 @@ class Window(QMainWindow):
         self.worker.done.connect(self.batch_done)
         self.worker.done.connect(self.thread.quit)
         self.worker.done.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
         self.thread.finished.connect(self.thread_finished)
         self.thread.start()
 
@@ -349,6 +348,11 @@ class Window(QMainWindow):
 
     @Slot()
     def thread_finished(self):
+        thread = self.thread
+        thread.wait()
+        self.thread = None
+        self.worker = None
+        thread.deleteLater()
         self.running = False
         self.refresh_controls()
         if self.closing:
@@ -380,8 +384,12 @@ class Window(QMainWindow):
         event.acceptProposedAction()
 
 
+_application = None
+
 def create_application():
+    global _application
     app = QApplication.instance() or QApplication(sys.argv)
+    _application = app
     app.setApplicationName("HlgBridge")
     app.setStyle("Fusion")
     app.setStyleSheet("""
@@ -403,4 +411,15 @@ def main():
     app = create_application()
     window = Window()
     window.show()
-    return app.exec()
+    result = app.exec()
+    dispose_window(window, app)
+    return result
+
+
+def dispose_window(window, app):
+    """Destroy widgets and join workers while QApplication is still alive."""
+    window.pool.waitForDone()
+    window.close()
+    window.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    app.processEvents()

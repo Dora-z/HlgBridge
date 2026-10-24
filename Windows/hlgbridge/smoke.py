@@ -23,7 +23,7 @@ def run(report_path):
         print("self-test: " + stage, flush=True)
     try:
         checkpoint("loading Qt")
-        from .gui import create_application, Window
+        from .gui import create_application, Window, dispose_window
         app = create_application()
         checkpoint("creating window")
         window = Window()
@@ -62,8 +62,7 @@ def run(report_path):
             window.pool.waitForDone()
             app.processEvents()
             checkpoint("closing window")
-            window.close()
-            app.processEvents()
+            dispose_window(window, app)
         checkpoint("done")
         result.update(success=True, qt=True, hevc_10_bit=True, ultra_hdr=True, qt_batch_thread=True)
     except Exception:
