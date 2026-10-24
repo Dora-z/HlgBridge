@@ -25,6 +25,7 @@ public final class Converter {
     public static func classify(_ profile: String) -> ColorKind {
         let name = profile.lowercased()
         if name.contains("hlg") { return .hlg }
+        if name.contains("pq") || name.contains("log") { return .unknown }
         // Do not interpret untagged, PQ, or log images as sRGB.
         if name.contains("srgb") || name.contains("display p3") || name.contains("adobe rgb") || name.contains("bt.709") {
             return .sdr
@@ -49,18 +50,19 @@ public final class Converter {
         }
         return (image.transformed(by: CGAffineTransform(translationX: -bounds.minX, y: -bounds.minY)), info, properties)
     }
-    private func sdrImage(_ image: CIImage, hdr: Bool) -> CIImage {
+    private func sdrImage(_ image: CIImage, hdr: Bool, toneStyle: ToneStyle, subjectLift: Double) throws -> CIImage {
         guard hdr else { return image }
         let filter = CIFilter.toneMapHeadroom()
         filter.inputImage = image
         filter.sourceHeadroom = image.contentHeadroom > 1 ? image.contentHeadroom : 1000 / 203
         filter.targetHeadroom = 1
-        return filter.outputImage ?? image
+        let mapped = filter.outputImage ?? image
+        return toneStyle == .subject ? try SubjectTone.apply(mapped, strength: subjectLift) : mapped
     }
-    public func preview(_ url: URL, assumeHLG: Bool = false) throws -> CGImage {
+    public func preview(_ url: URL, assumeHLG: Bool = false, toneStyle: ToneStyle = .subject, subjectLift: Double = 0.65) throws -> CGImage {
         let (input, info, _) = try load(url, assumeHLG: assumeHLG)
         let scale = min(1, 1400 / max(input.extent.width, input.extent.height))
-        let image = sdrImage(input, hdr: info.kind == .hlg || (info.kind == .unknown && assumeHLG))
+        let image = try sdrImage(input, hdr: info.kind == .hlg || (info.kind == .unknown && assumeHLG), toneStyle: toneStyle, subjectLift: subjectLift)
             .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         guard let output = context.createCGImage(image, from: image.extent.integral, format: .RGBA8,
                                                  colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!) else {
@@ -124,7 +126,7 @@ public final class Converter {
         let (input, info, props) = try load(source, assumeHLG: options.assumeHLG)
         let isHDR = info.kind == .hlg || (info.kind == .unknown && options.assumeHLG)
         if !isHDR && options.mode == .hdr { throw BridgeError("这是 SDR 照片，不能生成真实 HDR；请选择普通 JPEG 或同时导出。") }
-        let sdr = try jpeg(sdrImage(input, hdr: isHDR), properties: props, keepGPS: options.keepGPS)
+        let sdr = try jpeg(sdrImage(input, hdr: isHDR, toneStyle: options.toneStyle, subjectLift: options.subjectLift), properties: props, keepGPS: options.keepGPS)
         try cancellation.check()
         var pending: [(String, Data)] = []
         if options.mode != .hdr { pending.append(("SDR", sdr)) }

@@ -4,6 +4,9 @@ import ImageIO
 public enum OutputMode: String, CaseIterable, Sendable {
     case sdr = "普通 JPEG", hdr = "HDR JPEG", both = "同时导出"
 }
+public enum ToneStyle: String, CaseIterable, Sendable {
+    case subject = "主体明亮", standard = "系统映射"
+}
 public enum ColorKind: String, Sendable { case hlg = "HDR · HLG", sdr = "SDR", unknown = "未知色彩" }
 public struct PhotoInfo: Sendable {
     public let url: URL
@@ -17,8 +20,11 @@ public struct ConversionOptions: Sendable {
     public var mode: OutputMode = .both
     public var keepGPS = false
     public var assumeHLG = false
-    public init(mode: OutputMode = .both, keepGPS: Bool = false, assumeHLG: Bool = false) {
+    public var toneStyle: ToneStyle = .subject
+    public var subjectLift: Double = 0.65
+    public init(mode: OutputMode = .both, keepGPS: Bool = false, assumeHLG: Bool = false, toneStyle: ToneStyle = .subject, subjectLift: Double = 0.65) {
         self.mode = mode; self.keepGPS = keepGPS; self.assumeHLG = assumeHLG
+        self.toneStyle = toneStyle; self.subjectLift = subjectLift
     }
 }
 public struct ConversionResult: Sendable {

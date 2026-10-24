@@ -6,7 +6,8 @@
 
 1. 打开 `HlgBridge.app`，拖入 `.HIF`、`.HEIF`、`.HEIC` 照片或文件夹。
 2. 选择普通 JPEG、HDR JPEG 或同时导出（默认）。
-3. 选择输出目录，点击「开始转换」。
+3. 选择 SDR 观感：默认「主体明亮」，提亮强度 65%；也可选择原来的「系统映射」。
+4. 选择输出目录，点击「开始转换」。
 
 普通 JPEG 适合相册、分享和打印。HDR JPEG 含普通 SDR 底图与增益图，兼容的查看器可恢复高光；不支持 HDR 的查看器显示 SDR 底图。HDR 屏幕本身不代表相册一定兼容 Ultra HDR。
 
@@ -39,7 +40,7 @@ open dist/HlgBridge.app
 
 ```sh
 dist/hlgbridge-cli /path/to/photos /path/to/output
-dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --sdr
+dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --sdr --standard
 dist/hlgbridge-cli /path/to/photo.HIF /path/to/output --hdr --keep-gps
 dist/hlgbridge-cli --verify /path/to/photo_HDR.jpg
 ```
@@ -50,7 +51,9 @@ dist/hlgbridge-cli --verify /path/to/photo_HDR.jpg
 
 ImageIO 读取色彩配置和拍摄信息，Core Image 以扩展线性 BT.2020、半精度浮点处理，不提前截断为 8 位。
 
-HLG 输入通过 macOS 15 的 `CIToneMapHeadroom` 映射至 SDR，再转换为带 ICC 配置的 sRGB JPEG。HDR 路径将原始线性 HDR 像素和**已经编码的同一张 SDR JPEG**传给 libultrahdr，生成多通道增益图（1/2 分辨率，质量 95）。启用 XMP 与 ISO 21496-1 两种增益图元数据。不会将 HDR 成品再交给普通 JPEG 编码器，以免丢失增益图。
+HLG 输入通过 macOS 15 的 `CIToneMapHeadroom` 映射至 SDR，再转换为带 ICC 配置的 sRGB JPEG。「主体明亮」在系统映射后，用线性 BT.2020 亮度曲线抬升暗部及中间调，保持黑白端点和中性色；高亮超出色域时压缩饱和度。它不加入拍屏参考里的偏粉色，也不声称复刻松下 MODE2。该控制仅作用于 HLG 的 SDR 输出与 HDR 文件的 SDR 底图，不改变原始 HDR 目标像素。
+
+HDR 路径将原始线性 HDR 像素和**已经编码的同一张 SDR JPEG**传给 libultrahdr，生成多通道增益图（1/2 分辨率，质量 95）。启用 XMP 与 ISO 21496-1 两种增益图元数据。不会将 HDR 成品再交给普通 JPEG 编码器，以免丢失增益图。
 
 HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用 Core Image 解析出的 content headroom。SDR 色调映射是显示适配，不保证重现相机所有屏幕设置或厂商相册风格。
 
@@ -63,7 +66,7 @@ HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用
 | 环境 | 状态 |
 |---|---|
 | macOS 15.6 / Intel | 本地构建与测试环境 |
-| Panasonic DC-L10 / 固件 1.2 / 10 位 BT.2100 HLG | 已确认系统解码支持；原片不入库 |
+| Panasonic DC-L10 / 固件 1.2 / 10 位 BT.2100 HLG | 已确认系统解码支持；双格式全分辨率输出与 HDR 解码已验证；原片不入库 |
 | 小米 13 / HyperOS 4.0.0.32 / 相册 5.4.2.10-0907-cn | **待实机验收，未宣称 HDR 适配成功** |
 | Apple Silicon | 源码支持，待独立构建验证 |
 
@@ -77,3 +80,11 @@ HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用
 - `HlgCLI`：批处理和 HDR 解码验证工具。
 
 第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。个人照片、生成图片、应用包和构建缓存不提交到仓库。
+
+## 为什么与相机屏幕不同？
+
+相机屏幕上的 `MON MODE2` 表示启用了 HLG 显示辅助。松下说明 MODE2 优先主体亮度，MODE1 优先天空等高亮区域。系统默认色调映射并不等于这两种厂商显示转换。[官方说明](https://eww.pavc.panasonic.co.jp/dscoi/DC-L10/html/DC-L10_DVQP3497_eng/0100.html)
+
+默认「主体明亮」是可调的近似观感，不是经过校准的相机匹配。拍屏照片受相机屏幕亮度、拍摄手机曝光和白平衡影响，不能当作绝对色彩基准。精确对照应使用同一张 HEIF 在相机内通过「回放 → 处理图像 → HEIF 转 JPEG」生成的文件。[相机转换说明](https://eww.pavc.panasonic.co.jp/dscoi/DC-L10/html/DC-L10_DVQP3497_eng/0110.html)
+
+本机原片验证：5408 × 3608；HDR 可完整解码，包含 XMP/ISO 两种增益图标记。系统映射下两份 JPEG 的压缩像素数据相同；ColorSync 解码差异最大为 1/255，因此不宣称所有解码器逐像素相同。原生界面交互检查尚未完成（当前电脑控制权限未授予）。

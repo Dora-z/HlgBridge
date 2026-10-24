@@ -87,6 +87,20 @@ struct ContentView: View {
                     }
                     Divider()
                     VStack(alignment: .leading, spacing: 12) {
+                        Picker("SDR 观感", selection: $model.toneStyle) {
+                            ForEach(ToneStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }.onChange(of: model.toneStyle) { _, _ in model.updatePreview() }
+                        if model.toneStyle == .subject {
+                            HStack {
+                                Text("主体提亮").font(.caption)
+                                Slider(value: $model.subjectLift, in: 0...1, step: 0.05) { editing in
+                                    if !editing { model.updatePreview() }
+                                }
+                                Text("\(Int((model.subjectLift * 100).rounded()))%").font(.caption.monospacedDigit()).frame(width: 36)
+                            }
+                            Text("改善暗部观感，非松下 MODE2 精确复刻；仅影响 SDR 及 HDR 文件的 SDR 底图。")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         Picker("输出格式", selection: $model.mode) {
                             ForEach(OutputMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                         }.pickerStyle(.segmented)

@@ -17,6 +17,8 @@ struct PhotoRow: Identifiable {
     @Published var rows: [PhotoRow] = []
     @Published var selection: UUID?
     @Published var mode: OutputMode = .both
+    @Published var toneStyle: ToneStyle = .subject
+    @Published var subjectLift: Double = 0.65
     @Published var keepGPS = false
     @Published var outputDirectory: URL?
     @Published var running = false
@@ -70,12 +72,14 @@ struct PhotoRow: Identifiable {
     }
     func updatePreview() {
         let request = UUID(); previewID = request
-        preview = nil
+        preview = nil; previewBusy = false
+        previewMessage = "选择照片，查看转换后的 SDR 预览"
         guard let row = rows.first(where: { $0.id == selection }) else { return }
+        let style = toneStyle, lift = subjectLift
         previewBusy = true; previewMessage = "正在生成 SDR 预览…"
         Task {
             let result = await Task.detached(priority: .userInitiated) { () -> Result<CGImage, Error> in
-                Result { try Converter().preview(row.url, assumeHLG: row.assumeHLG) }
+                Result { try Converter().preview(row.url, assumeHLG: row.assumeHLG, toneStyle: style, subjectLift: lift) }
             }.value
             guard previewID == request else { return }
             previewBusy = false
@@ -91,6 +95,7 @@ struct PhotoRow: Identifiable {
         guard !running, !rows.isEmpty, let directory = outputDirectory else { return }
         let cancellation = CancellationToken(); token = cancellation
         let outputMode = mode, gps = keepGPS
+        let style = toneStyle, lift = subjectLift
         running = true; completed = 0; message = "开始转换…"
         for i in rows.indices { rows[i].status = "等待转换"; rows[i].failed = false; rows[i].outputs = [] }
         Task {
@@ -102,7 +107,7 @@ struct PhotoRow: Identifiable {
                 let result = await Task.detached(priority: .userInitiated) { () -> Result<ConversionResult, Error> in
                     autoreleasepool {
                         Result { try Converter().convert(row.url, to: directory,
-                            options: .init(mode: outputMode, keepGPS: gps, assumeHLG: row.assumeHLG), cancellation: cancellation) }
+                            options: .init(mode: outputMode, keepGPS: gps, assumeHLG: row.assumeHLG, toneStyle: style, subjectLift: lift), cancellation: cancellation) }
                     }
                 }.value
                 switch result {

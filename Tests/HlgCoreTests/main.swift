@@ -31,6 +31,7 @@ let cases: [(String, (ConverterTests) throws -> Void)] = [
     ("未知色彩和损坏文件", { try $0.testUnknownProfileAndCorruption() }),
     ("文件冲突不覆盖", { try $0.testCollisionDoesNotReplaceOriginal() }),
     ("取消和无写入权限清理", { try $0.testCancelledAndUnwritableLeaveNoTemporaryFiles() }),
+    ("主体提亮 / 中性色 / 黑白端点 / SDR 不变", { try $0.testSubjectTonePreservesEndpointsAndRaisesMidtones() }),
     ("递归扫描去重", { try $0.testRecursiveScannerDeduplicates() })
 ]
 for (name, test) in cases {

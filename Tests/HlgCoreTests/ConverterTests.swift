@@ -115,4 +115,26 @@ final class ConverterTests {
         let files = PhotoScanner.collect([file, directory, file])
         XCTAssertEqual(files.count, 1)
     }
+    func testSubjectTonePreservesEndpointsAndRaisesMidtones() throws {
+        let context = CIContext(options: [.workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!])
+        let space = CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!
+        var previous: Float = -1
+        for value in [Float(0), 0.01, 0.1, 0.3, 0.7, 1] {
+            let input = CIImage(color: CIColor(red: CGFloat(value), green: CGFloat(value), blue: CGFloat(value), colorSpace: space)!).cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
+            let output = try SubjectTone.apply(input, strength: 0.65)
+            var pixel = [Float](repeating: 0, count: 4)
+            context.render(output, toBitmap: &pixel, rowBytes: 16, bounds: input.extent, format: .RGBAf, colorSpace: space)
+            XCTAssertTrue(pixel.allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 1.001 })
+            XCTAssertTrue(abs(pixel[0] - pixel[1]) < 0.001 && abs(pixel[1] - pixel[2]) < 0.001)
+            XCTAssertTrue(pixel[0] >= previous)
+            if value > 0 && value < 1 { XCTAssertTrue(pixel[0] > value) }
+            if value == 0 || value == 1 { XCTAssertTrue(abs(pixel[0] - value) < 0.001) }
+            previous = pixel[0]
+        }
+        let source = try fixture(hdr: false)
+        let standard = try Converter().convert(source, to: directory, options: .init(mode: .sdr, toneStyle: .standard))
+        let subject = try Converter().convert(source, to: directory, options: .init(mode: .sdr, toneStyle: .subject))
+        XCTAssertEqual(try Data(contentsOf: standard.files[0]), try Data(contentsOf: subject.files[0]))
+    }
+
 }
