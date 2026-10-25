@@ -122,7 +122,7 @@ public final class Converter {
         if keepGPS { output[kCGImagePropertyGPSDictionary as String] = properties[kCGImagePropertyGPSDictionary as String] }
         CGImageDestinationAddImage(dest, cg, output as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { throw BridgeError("JPEG 编码失败。") }
-        return data as Data
+        return try JPEGColorProfile.embedSRGB(in: data as Data)
     }
     private func ultraHDR(_ input: CIImage, sdr: Data) throws -> Data {
         let width = Int(input.extent.width), height = Int(input.extent.height)

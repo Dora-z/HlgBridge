@@ -95,7 +95,7 @@ struct ContentView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         if model.toneStyle == .cameraHighlight {
-                            Text("沿用机内近似的暗部和中间调，只柔和压缩亮部，并保护超出 sRGB 色域的高亮颜色。")
+                            Text("保留机内近似的明亮观感，提前压缩亮部以保留衣物、书页等细节，并保护高亮颜色。")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         if model.toneStyle == .camera {

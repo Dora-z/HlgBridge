@@ -156,9 +156,10 @@ def map_sdr(linear: np.ndarray, options: Options) -> np.ndarray:
     if options.tone in {"camera", "camera-highlight"}:
         camera = 3.30 * y / (1 + 2.10 * y)
         if options.tone == "camera-highlight":
-            knee = np.float32(0.70)
-            target = np.where(camera <= knee, camera,
-                              knee + (1 - knee) * -np.expm1(-np.maximum(camera - knee, 0) / (1 - knee)))
+            blend = np.clip((y - np.float32(0.10)) / np.float32(0.25), 0, 1)
+            blend = blend * blend * (3 - 2 * blend)
+            protected = 3.30 * y / (1 + 3.30 * y)
+            target = camera * (1 - blend) + protected * blend
         else:
             target = np.minimum(camera, 1)
         black_gain = 3.30
@@ -173,10 +174,13 @@ def map_sdr(linear: np.ndarray, options: Options) -> np.ndarray:
     gain = np.divide(target, y, out=np.full_like(y, black_gain), where=y > 1e-8)
     rgb = (linear * gain[..., None]) @ BT2020_TO_709.T
     if options.tone == "camera-highlight":
-        peak, low = np.max(rgb, axis=-1), np.min(rgb, axis=-1)
-        chroma = np.minimum(1, (1 - target) / np.maximum(peak - target, 1e-8))
-        chroma = np.minimum(chroma, target / np.maximum(target - low, 1e-8))
-        rgb = target[..., None] + chroma[..., None] * (rgb - target[..., None])
+        rgb = np.maximum(rgb, 0)
+        peak = np.max(rgb, axis=-1)
+        knee = np.float32(0.90)
+        excess = np.maximum(peak - knee, 0)
+        target_peak = np.where(peak <= knee, peak, knee + (1 - knee) * excess / (excess + 1 - knee))
+        peak_gain = np.divide(target_peak, peak, out=np.ones_like(peak), where=peak > 1e-8)
+        rgb *= peak_gain[..., None]
     return srgb_encode(rgb)
 
 

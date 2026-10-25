@@ -57,12 +57,20 @@ final class ConverterTests {
         // The compressed SDR base must be reused without another JPEG generation.
         let context = CIContext()
         func pixels(_ url: URL) throws -> [UInt8] {
-            let image = try XCTUnwrap(CIImage(contentsOf: url, options: [.expandToHDR: false]))
+            let encoded = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))
+            let base = try XCTUnwrap(CGImageSourceCreateImageAtIndex(encoded, 0, [kCGImageSourceShouldAllowFloat: false] as CFDictionary))
+            // Inspect the ordinary JPEG base independently of Core Image's
+            // gain-map display adaptation for a file-backed HDR CIImage.
+            let image = CIImage(cgImage: base, options: [.contentHeadroom: 1.0, .toneMapHDRtoSDR: false])
             var pixels = [UInt8](repeating: 0, count: 64 * 48 * 4)
             context.render(image, toBitmap: &pixels, rowBytes: 64 * 4, bounds: CGRect(x: 0, y: 0, width: 64, height: 48), format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
             return pixels
         }
-        XCTAssertEqual(try pixels(sdr), try pixels(hdr))
+        let sdrPixels = try pixels(sdr), hdrPixels = try pixels(hdr)
+        XCTAssertEqual(sdrPixels, hdrPixels)
+        for file in [sdr, hdr] {
+            XCTAssertNotNil(try Data(contentsOf: file).range(of: Data("ICC_PROFILE\0".utf8)))
+        }
     }
     func testSDRDoesNotInventHDR() throws {
         let source = try fixture(hdr: false)
@@ -202,7 +210,7 @@ final class ConverterTests {
             return pixel
         }
         // The new mode must actually retain the old look, not simply darken the photo.
-        for rgb: [Float] in [[0, 0, 0], [0.02, 0.02, 0.02], [0.18, 0.18, 0.18], [0.30, 0.30, 0.30], [0.08, 0.12, 0.10]] {
+        for rgb: [Float] in [[0, 0, 0], [0.02, 0.02, 0.02], [0.05, 0.05, 0.05], [0.09, 0.09, 0.09], [0.04, 0.06, 0.05]] {
             let old = try render(rgb, protected: false, output: space)
             let new = try render(rgb, protected: true, output: space)
             for channel in 0..<3 { XCTAssertTrue(abs(new[channel] - old[channel]) < 0.0001) }
@@ -214,6 +222,9 @@ final class ConverterTests {
             XCTAssertTrue(abs(p[0] - p[1]) < 0.001 && abs(p[1] - p[2]) < 0.001)
             previous = p[0]
         }
+        let firstBright = try render([1, 1, 1], protected: true, output: space)
+        let secondBright = try render([2, 2, 2], protected: true, output: space)
+        XCTAssertTrue(secondBright[0] - firstBright[0] > 0.08)
         let destination = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
         for rgb: [Float] in [[4, 0.1, 0.1], [0.1, 4, 0.1], [0.1, 0.1, 4], [4, 3, 0.1]] {
             let p = try render(rgb, protected: true, output: destination)

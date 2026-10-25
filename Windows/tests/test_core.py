@@ -148,8 +148,8 @@ class CoreTests(unittest.TestCase):
             np.testing.assert_allclose(result[..., 1], result[..., 2], atol=1e-5)
 
     def test_camera_highlight_preserves_midtones_and_recovers_bright_steps(self):
-        rgb = np.array([[[0, 0, 0], [0.02, 0.02, 0.02], [0.18, 0.18, 0.18],
-                         [0.30, 0.30, 0.30], [0.08, 0.12, 0.10]]], np.float32)
+        rgb = np.array([[[0, 0, 0], [0.02, 0.02, 0.02], [0.05, 0.05, 0.05],
+                         [0.09, 0.09, 0.09], [0.04, 0.06, 0.05]]], np.float32)
         old = core.map_sdr(rgb, core.Options(tone="camera"))
         new = core.map_sdr(rgb, core.Options(tone="camera-highlight"))
         np.testing.assert_allclose(new, old, atol=1e-6)
@@ -158,6 +158,7 @@ class CoreTests(unittest.TestCase):
         protected = core.map_sdr(bright, core.Options(tone="camera-highlight"))
         self.assertTrue(np.all(np.diff(protected[0, :, 0]) > 0.001))
         self.assertTrue(np.all(protected < 0.999))
+        self.assertGreater(float(protected[0, 4, 0] - protected[0, 3, 0]), 0.04)
         legacy = core.map_sdr(bright, core.Options(tone="camera"))
         np.testing.assert_allclose(legacy[0, -4:], 1, atol=1e-6)
         colors = np.array([[[4, 0.1, 0.1], [0.1, 4, 0.1], [0.1, 0.1, 4], [4, 3, 0.1]]], np.float32)
