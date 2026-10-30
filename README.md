@@ -24,7 +24,7 @@ Mac 用户从 [Releases](https://github.com/Dora-z/HlgBridge/releases) 下载 `.
 
 ## 构建 macOS 版
 
-需要 macOS 15+、Xcode Command Line Tools（Swift 6+）、Git、CMake 3.15+ 和 Python 3.10+（仅制作 DMG 时使用）。无须安装完整 Xcode。应用按当前 Mac 架构构建；Intel 和 Apple Silicon 应分别构建。
+需要 macOS 15+、Xcode Command Line Tools（Swift 6+）、Git、CMake 3.15+ 和 Python 3.10+（仅制作 DMG 时使用）。无须安装完整 Xcode。应用按指定的 Mac 架构构建；未指定时使用当前机器架构。
 
 ```sh
 # 没有 CMake 时，可以安装到项目构建目录
@@ -34,6 +34,14 @@ swift run HlgChecks
 ./Scripts/build-app.sh
 open dist/HlgBridge.app
 ```
+
+在 Apple Silicon Mac 上构建可直接运行的 arm64 版本：
+
+```sh
+MACOS_ARCH=arm64 ./Scripts/build-app.sh
+```
+
+Intel 版本使用 `MACOS_ARCH=x86_64 ./Scripts/build-app.sh`。架构也可以作为脚本第一个参数传入，例如 `./Scripts/build-app.sh arm64`；原生依赖会使用同一架构重新编译。
 
 产物：`dist/HlgBridge.app`、`dist/HlgBridge-v版本-macOS-架构.dmg`、DMG 的 `.sha256` 校验文件、备用 `dist/HlgBridge-macOS.zip` 和命令行工具 `dist/hlgbridge-cli`。DMG 使用中文安装提示、自定义背景和 Applications 快捷方式，可直接拖拽安装；Finder 布局由 dmgbuild 写入，无须控制 Finder。
 
@@ -117,7 +125,7 @@ HLG 默认参考峰值为 1000 nits，线性参考白为 203 nits；优先使用
 | macOS 15.6 / Intel | 本地构建与测试环境 |
 | Panasonic DC-L10 / 固件 1.2 / 10 位 BT.2100 HLG | 已确认系统解码支持；双格式全分辨率输出与 HDR 解码已验证；原片不入库 |
 | 小米 13 / HyperOS 4.0.0.32 / 相册 5.4.2.10-0907-cn | **待实机验收，未宣称 HDR 适配成功** |
-| Apple Silicon | 源码支持，待独立构建验证 |
+| Apple Silicon | macOS Actions 使用 arm64 runner 构建并打包验证；也可在本机用 `MACOS_ARCH=arm64` 构建 |
 | Windows 10（1809+）/11 x64 | Windows runner 编译、13 组引擎测试及打包应用自检已通过；最新构建见 Actions |
 
 手机验收：用不会压缩或重编码的文件传输方式复制两种 JPEG，先确认 SDR 的亮度、色彩和方向正常，再观察 HDR 成品在相册中是否触发高动态显示；同时检查拍摄日期排序。分享平台可能移除增益图，应另行验证。

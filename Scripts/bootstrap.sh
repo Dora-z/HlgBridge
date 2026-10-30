@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 REV=e5f5a022fe96fc4dc2ee35c19f733a50df807abe
 CMAKE="${CMAKE:-cmake}"
+MACOS_ARCH="${MACOS_ARCH:-}"
 if ! command -v "$CMAKE" >/dev/null 2>&1; then
   if [ -x "$ROOT/.build/tools/cmake/data/bin/cmake" ]; then
     CMAKE="$ROOT/.build/tools/cmake/data/bin/cmake"
@@ -17,8 +18,12 @@ if [ ! -d .build/deps/libultrahdr/.git ]; then
   git clone https://github.com/google/libultrahdr.git .build/deps/libultrahdr
 fi
 git -C .build/deps/libultrahdr checkout --detach "$REV"
-"$CMAKE" -S .build/deps/libultrahdr -B .build/deps/uhdr-build \
-  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+CMAKE_ARGS=(
+  -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+)
+if [ -n "$MACOS_ARCH" ]; then CMAKE_ARGS+=("-DCMAKE_OSX_ARCHITECTURES=$MACOS_ARCH"); fi
+"$CMAKE" -S .build/deps/libultrahdr -B .build/deps/uhdr-build "${CMAKE_ARGS[@]}" \
   -DBUILD_SHARED_LIBS=OFF -DUHDR_BUILD_DEPS=ON -DUHDR_BUILD_EXAMPLES=OFF \
   -DUHDR_ENABLE_HEIF=OFF -DUHDR_WRITE_XMP=ON -DUHDR_WRITE_ISO=ON
 "$CMAKE" --build .build/deps/uhdr-build --parallel 4

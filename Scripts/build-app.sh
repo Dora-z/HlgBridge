@@ -1,14 +1,26 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-if [ ! -f .build/native/lib/libuhdr.a ]; then Scripts/bootstrap.sh; fi
-swift build -c release
+MACOS_ARCH="${MACOS_ARCH:-${1:-}}"
+case "$MACOS_ARCH" in
+  ""|x86_64|arm64) ;;
+  *) printf '不支持的 macOS 架构：%s（可用 x86_64 或 arm64）\n' "$MACOS_ARCH" >&2; exit 1 ;;
+esac
+NEED_BOOTSTRAP=0
+if [ ! -f .build/native/lib/libuhdr.a ]; then NEED_BOOTSTRAP=1
+elif [ -n "$MACOS_ARCH" ] && command -v lipo >/dev/null 2>&1 && ! lipo -archs .build/native/lib/libuhdr.a | tr ' ' '\n' | grep -qx "$MACOS_ARCH"; then NEED_BOOTSTRAP=1
+fi
+if [ "$NEED_BOOTSTRAP" -eq 1 ]; then MACOS_ARCH="$MACOS_ARCH" Scripts/bootstrap.sh; fi
+SWIFT_BUILD_ARGS=(-c release)
+if [ -n "$MACOS_ARCH" ]; then SWIFT_BUILD_ARGS+=(--arch "$MACOS_ARCH"); fi
+swift build "${SWIFT_BUILD_ARGS[@]}"
 Scripts/build-icon.sh
 APP="$PWD/dist/HlgBridge.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Licenses"
-cp .build/release/HlgBridge "$APP/Contents/MacOS/"
+BUILD_DIR="$(swift build "${SWIFT_BUILD_ARGS[@]}" --show-bin-path)"
+cp "$BUILD_DIR/HlgBridge" "$APP/Contents/MacOS/"
 cp .build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-cp .build/release/hlgbridge-cli dist/
+cp "$BUILD_DIR/hlgbridge-cli" dist/
 cp .build/native/licenses/* "$APP/Contents/Resources/Licenses/"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -29,6 +41,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 # Local ad-hoc signature only; no Developer ID identity or notarization.
 codesign --force --sign - "$APP"
+if [ -n "$MACOS_ARCH" ] && command -v lipo >/dev/null 2>&1 && ! lipo -archs "$APP/Contents/MacOS/HlgBridge" | tr ' ' '\n' | grep -qx "$MACOS_ARCH"; then
+  printf '构建产物架构不匹配：期望 %s，实际 %s\n' "$MACOS_ARCH" "$(lipo -archs "$APP/Contents/MacOS/HlgBridge")" >&2
+  exit 1
+fi
 ditto -c -k --sequesterRsrc --keepParent "$APP" dist/HlgBridge-macOS.zip
 printf '应用已生成：%s\n' "$APP"
 Scripts/build-dmg.sh "$APP"
