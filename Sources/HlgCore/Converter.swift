@@ -25,8 +25,11 @@ public final class Converter {
     public static func embeddedThumbnail(_ url: URL) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
         return CGImageSourceCreateThumbnailAtIndex(source, 0, [
-            kCGImageSourceCreateThumbnailFromImageAlways: false,
-            kCGImageSourceCreateThumbnailFromImageIfAbsent: false,
+            // Some camera HIF files do not contain an embedded thumbnail.
+            // Ask ImageIO to make the small preview from the primary image as
+            // a fallback so the queue does not remain blank.
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: 160] as CFDictionary)
     }
